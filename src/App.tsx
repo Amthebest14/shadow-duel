@@ -3,26 +3,33 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useShieldedWallet } from './seismic-mock';
 import { useAccount } from 'wagmi';
+import { useDuel, type Move, type ActiveDuel } from './hooks/useDuel';
 
-// SVG Paths for HandMorph
 const SVGS = {
-  FIST: "M 8 4 L 16 4 L 20 12 L 16 20 L 8 20 L 4 12 Z", // Closed Octagon (Fist)
-  ROCK: "M 12 3 A 9 9 0 0 0 3 12 A 9 9 0 0 0 12 21 A 9 9 0 0 0 21 12 A 9 9 0 0 0 12 3 Z", // Circle (Rock)
-  PAPER: "M 4 3 L 20 3 L 20 21 L 4 21 Z", // Rectangle (Paper)
-  SCISSORS: "M 6 6 L 18 18 M 18 6 L 6 18", // Cross (Scissors)
+  FIST: "M 8 4 L 16 4 L 20 12 L 16 20 L 8 20 L 4 12 Z", 
+  ROCK: "M 12 3 A 9 9 0 0 0 3 12 A 9 9 0 0 0 12 21 A 9 9 0 0 0 21 12 A 9 9 0 0 0 12 3 Z", 
+  PAPER: "M 4 3 L 20 3 L 20 21 L 4 21 Z", 
+  SCISSORS: "M 6 6 L 18 18 M 18 6 L 6 18", 
 };
 
 const GLITCH_PATHS = [SVGS.FIST, SVGS.ROCK, SVGS.PAPER, SVGS.SCISSORS];
 
 function App() {
   const { isConnected } = useAccount();
-  const { isReady, shieldedBalance } = useShieldedWallet();
+  const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
+  const effectiveConnected = isConnected || isDevBypass;
+  const { isReady, shieldedBalance, updateBalance } = useShieldedWallet();
+  const { activeDuels, playHand, isComputing } = useDuel();
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playerResult, setPlayerResult] = useState<"ROCK" | "PAPER" | "SCISSORS" | null>(null);
-  const [opponentResult, setOpponentResult] = useState<"ROCK" | "PAPER" | "SCISSORS" | null>(null);
+  // Selected Duel Game State
+  const [activePlay, setActivePlay] = useState<ActiveDuel | null>(null);
   
-  // Opponent glitch path index
+  // Hand Morph Game State
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playerResult, setPlayerResult] = useState<Move | null>(null);
+  const [opponentResult, setOpponentResult] = useState<Move | null>(null);
+  const [duelOutcome, setDuelOutcome] = useState<"VICTORY" | "DEFEAT" | "DRAW" | null>(null);
+  
   const [glitchIndex, setGlitchIndex] = useState(0);
 
   useEffect(() => {
@@ -30,23 +37,38 @@ function App() {
     if (isPlaying) {
       interval = setInterval(() => {
         setGlitchIndex((prev) => (prev + 1) % GLITCH_PATHS.length);
-      }, 100); // 100ms glitch speed
+      }, 75); // fast glitch speed
     }
     return () => clearInterval(interval);
   }, [isPlaying]);
 
-  const playRound = async () => {
+  const handleThrow = async (selectedMove: Move) => {
+    if (!activePlay) return;
     setIsPlaying(true);
+    setPlayerResult(null); // Back to fist
+    setOpponentResult(null);
+    setDuelOutcome(null);
+
+    // This calls our hook which simulates the 500ms useShieldedWrite + DuelResolved listener
+    const { opponentMove, result, payoutDelta } = await playHand(activePlay.id, selectedMove, activePlay.wager);
+    
+    // Stop Shake (Morph Time!)
+    setPlayerResult(selectedMove);
+    setOpponentResult(opponentMove);
+    setDuelOutcome(result);
+    // Real-time Wager Payout execution
+    if (payoutDelta !== 0) {
+      updateBalance(payoutDelta);
+    }
+
+    setIsPlaying(false);
+  };
+
+  const closeMatch = () => {
+    setActivePlay(null);
     setPlayerResult(null);
     setOpponentResult(null);
-
-    // Simulate Seismic Encrypted Transaction & 500ms Block Finality
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const outcomes: Array<"ROCK" | "PAPER" | "SCISSORS"> = ["ROCK", "PAPER", "SCISSORS"];
-    setPlayerResult(outcomes[Math.floor(Math.random() * outcomes.length)]);
-    setOpponentResult(outcomes[Math.floor(Math.random() * outcomes.length)]);
-    
+    setDuelOutcome(null);
     setIsPlaying(false);
   };
 
@@ -55,12 +77,11 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#0B0B0B] flex flex-col items-center p-6 relative overflow-x-hidden font-mono antialiased">
-      {/* Background decorations */}
       <div className="fixed top-[-10%] left-[-10%] w-96 h-96 bg-[#39FF14]/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-[#39FF14]/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Header / Dashboard */}
-      <header className="glass-panel w-full max-w-5xl p-6 mb-12 flex justify-between items-center z-10 border border-white/10 bg-black/40 rounded-xl backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+      {/* Dashboard */}
+      <header className="glass-panel w-full max-w-5xl p-6 mb-8 flex justify-between items-center z-20 border border-white/10 bg-black/40 rounded-xl backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
         <div>
           <h1 className="text-3xl font-bold tracking-widest text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">SHADOW DUEL</h1>
           <p className="text-sm text-gray-400 mt-1">Encrypted RPS on Seismic Testnet</p>
@@ -70,52 +91,28 @@ function App() {
              <div className="text-right flex flex-col items-end">
                <div className="flex items-center gap-2">
                  <span className={`w-2 h-2 rounded-full ${isReady ? 'bg-[#39FF14] animate-pulse' : 'bg-yellow-500'}`} />
-                 <span className="text-gray-300">{isReady ? 'Shielded' : 'Connecting Vault...'}</span>
+                 <span className={`text-sm ${isReady ? 'text-[#39FF14]' : 'text-gray-400'}`}>{isReady ? 'TEE Secured' : 'Connecting Vault...'}</span>
                </div>
                <div className="flex items-center gap-2 mt-1">
                  {!isReady && <span className="w-3 h-3 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin"></span>}
-                 <p className="text-lg font-mono text-white">Bal: {shieldedBalance || "--- SEIS"}</p>
+                 <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
+                   Bal: <span className="text-[#39FF14]">{shieldedBalance || "---."}</span>
+                 </p>
                </div>
              </div>
           )}
-          
-          {/* Custom Connect Button */}
           <ConnectButton.Custom>
-            {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+             {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
               const connected = mounted && account && chain;
               return (
-                <div
-                  {...(!mounted && {
-                    'aria-hidden': true,
-                    style: { opacity: 0, pointerEvents: 'none', userSelect: 'none' },
-                  })}
-                >
+                <div {...(!mounted && { 'aria-hidden': true, style: { opacity: 0, pointerEvents: 'none', userSelect: 'none' }})}>
                   {(() => {
-                    if (!connected) {
-                      return (
-                        <button 
-                          onClick={openConnectModal} 
-                          className="px-6 py-3 bg-black border border-[#39FF14] text-[#39FF14] font-bold rounded-lg hover:shadow-[0_0_15px_rgba(57,255,20,0.6)] hover:bg-[#39FF14]/10 transition-all font-mono"
-                        >
-                          CONNECT WALLET
-                        </button>
-                      );
-                    }
-                    if (chain.unsupported) {
-                      return (
-                        <button onClick={openChainModal} className="px-6 py-3 bg-red-900 border border-red-500 text-white rounded-lg">
-                          Wrong network
-                        </button>
-                      );
-                    }
+                    if (!connected) return <button onClick={openConnectModal} className="px-6 py-3 bg-black border border-[#39FF14] text-[#39FF14] font-bold rounded-lg hover:shadow-[0_0_15px_rgba(57,255,20,0.6)] hover:bg-[#39FF14]/10 transition-all">CONNECT WALLET</button>;
+                    if (chain.unsupported) return <button onClick={openChainModal} className="px-6 py-3 bg-red-900 border border-red-500 text-white rounded-lg">Wrong network</button>;
                     return (
-                      <button 
-                        onClick={openAccountModal}
-                        className="flex items-center gap-2 px-4 py-2 bg-black border border-[#39FF14]/50 hover:border-[#39FF14] text-gray-200 rounded-lg shadow-[0_0_10px_rgba(57,255,20,0.2)] transition-all font-mono"
-                      >
+                      <button onClick={openAccountModal} className="flex items-center gap-2 px-4 py-2 bg-black border border-[#39FF14]/50 hover:border-[#39FF14] text-gray-200 rounded-lg shadow-[0_0_10px_rgba(57,255,20,0.2)] transition-all font-mono">
                         <div className="w-4 h-4 rounded-full bg-gradient-to-r from-[#39FF14] to-emerald-900"></div>
                         {account.displayName}
-                        {account.displayBalance ? ` (${account.displayBalance})` : ''}
                       </button>
                     );
                   })()}
@@ -126,101 +123,131 @@ function App() {
         </div>
       </header>
 
-      {/* Main Play Area */}
-      <main className="w-full max-w-4xl flex flex-col items-center z-10">
+      {/* Main Lobby or Arena Area */}
+      <main className="w-full max-w-5xl flex flex-col items-center z-10 relative">
         
-        {!isConnected ? (
-          <div className="flex flex-col items-center justify-center p-24 text-center glass-panel border border-white/10 bg-black/40 rounded-xl w-full">
+        {!effectiveConnected || !isReady ? (
+          <div className="flex flex-col items-center justify-center p-32 text-center glass-panel border border-white/10 bg-black/40 rounded-xl w-full">
             <svg className="w-24 h-24 text-[#39FF14]/50 mb-6 drop-shadow-[0_0_15px_rgba(57,255,20,0.3)] animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <h2 className="text-2xl font-bold text-white mb-4">ACCESS RESTRICTED</h2>
-            <p className="text-gray-400 mb-8 max-w-md">Connect your wallet to access the Shadow Duel arena. All matchmaking and moves are cryptographically shielded by the Seismic TEE.</p>
+            <h2 className="text-3xl font-bold text-white mb-4 tracking-wider">ACCESS RESTRICTED</h2>
+            <p className="text-gray-400 max-w-md">Wallet connection required. All matchmaking and moves are cryptographically shielded by the Seismic TEE.</p>
           </div>
-        ) : !isReady ? (
-           <div className="flex flex-col items-center justify-center p-24 text-center glass-panel border border-white/10 bg-black/40 rounded-xl w-full">
-             <div className="w-16 h-16 border-4 border-[#39FF14]/20 border-t-[#39FF14] rounded-full animate-spin mb-6"></div>
-             <p className="text-[#39FF14] font-mono animate-pulse">Establishing Secure TEE Connection...</p>
-           </div>
+        ) : !activePlay ? (
+          // LOBBY UI
+          <div className="w-full">
+            <h2 className="text-2xl font-bold text-white mb-6 border-b border-white/10 pb-4">ACTIVE DUELS</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {activeDuels.map(duel => (
+                <div key={duel.id} className="glass-panel p-6 bg-black/60 border border-white/5 hover:border-[#39FF14]/50 transition-colors flex justify-between items-center">
+                  <div>
+                    <p className="text-[#39FF14] font-bold text-xl drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">{duel.wager.toFixed(2)} SEIS</p>
+                    <p className="text-gray-500 text-sm mt-1">Host: <span className="text-gray-300 font-bold">{duel.player1ShadowName}</span></p>
+                    <p className="text-yellow-600 text-xs mt-2 animate-pulse">Waiting for Player 2...</p>
+                  </div>
+                  <button 
+                    onClick={() => setActivePlay(duel)}
+                     className="px-6 py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all hover:shadow-[0_0_15px_rgba(57,255,20,0.5)]"
+                  >
+                    JOIN DUEL
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
+          // DUEL ARENA UI
           <AnimatePresence>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full flex flex-col items-center"
-            >
-              <div className="flex w-full justify-between items-center mb-12 gap-8">
-                {/* Player Hand */}
-                <div className="flex flex-col items-center w-1/2">
-                  <h3 className="text-xl font-bold text-white mb-6 tracking-wider">YOU</h3>
-                  <motion.div
-                    animate={
-                      isPlaying ? {
-                        y: [0, -30, 0, -30, 0, -30, 0], // 3-beat Shake
-                        rotate: [0, -10, 10, -10, 10, -10, 0]
-                      } : {}
-                    }
-                    transition={{ duration: 0.6, ease: "easeInOut", repeat: isPlaying ? Infinity : 0 }}
-                    className={`w-56 h-56 flex flex-col items-center justify-center rounded-3xl transition-all duration-500 ${playerResult ? 'bg-[#39FF14]/10 shadow-[0_0_30px_rgba(57,255,20,0.3)] border border-[#39FF14]/50 scale-105' : 'bg-gray-900 border border-gray-800'}`}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full flex justify-center">
+              
+              <div className="w-full max-w-4xl relative glass-panel bg-black/80 border-[#39FF14]/20 p-12">
+                
+                {duelOutcome && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 30 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl"
                   >
-                    <svg 
-                      className={`w-32 h-32 ${playerResult ? 'text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.8)]' : 'text-gray-500 drop-shadow-[0_0_5px_rgba(255,255,255,0.1)]'}`} 
-                      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <motion.path animate={{ d: playerPath }} transition={{ duration: 0.5, ease: "easeInOut" }} />
-                    </svg>
-                    {playerResult && !isPlaying && (
-                      <span className="text-2xl mt-4 font-bold text-[#39FF14] drop-shadow-[0_0_5px_rgba(57,255,20,0.8)]">{playerResult}</span>
-                    )}
+                     <h1 className={`text-6xl font-black tracking-widest mb-4 ${duelOutcome === 'VICTORY' ? 'text-[#39FF14] drop-shadow-[0_0_30px_rgba(57,255,20,0.8)]' : duelOutcome === 'DEFEAT' ? 'text-red-600 drop-shadow-[0_0_30px_rgba(255,0,0,0.8)]' : 'text-gray-400 drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]'}`}>
+                       {duelOutcome}
+                     </h1>
+                     <p className="text-xl text-white mb-8">
+                       {duelOutcome === 'VICTORY' ? `Payout Transferred: +${activePlay.wager.toFixed(2)} SEIS` : duelOutcome === 'DEFEAT' ? `Wager Lost: -${activePlay.wager.toFixed(2)} SEIS` : 'Wager Refunded (0 SEIS)'}
+                     </p>
+                     <button onClick={closeMatch} className="px-8 py-3 bg-white text-black font-bold border border-white hover:bg-black hover:text-white transition-all">RETURN TO LOBBY</button>
                   </motion.div>
+                )}
+
+                <div className="flex w-full justify-between items-center gap-8 relative z-10">
+                  {/* Player Hand */}
+                  <div className="flex flex-col items-center w-1/3">
+                    <h3 className="text-xl font-bold text-[#39FF14] mb-2 tracking-wider drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">YOU</h3>
+                    <motion.div
+                      animate={isPlaying ? { y: [0, -40, 0, -40, 0, -40, 0], rotate: [0, -10, 10, -10, 10, -10, 0]} : {}}
+                      transition={{ duration: 0.5, ease: "easeInOut", repeat: isPlaying ? Infinity : 0 }}
+                      className={`w-48 h-48 flex items-center justify-center rounded-2xl transition-all duration-500 border ${duelOutcome === 'VICTORY' ? 'bg-[#39FF14]/20 shadow-[0_0_40px_rgba(57,255,20,0.5)] border-[#39FF14] scale-110 z-20' : 'bg-black border-gray-800'}`}
+                    >
+                      <svg className={`w-28 h-28 ${duelOutcome === 'VICTORY' ? 'text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.8)]' : 'text-gray-300'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <motion.path animate={{ d: playerPath }} transition={{ duration: duelOutcome ? 0.3 : 0 }} />
+                      </svg>
+                    </motion.div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center">
+                    <p className="text-sm text-gray-500 mb-2 font-bold tracking-widest">WAGER</p>
+                    <p className="text-3xl font-bold text-white mb-4 bg-gray-900 border border-gray-700 px-6 py-2 rounded shadow-inner">{activePlay.wager.toFixed(2)} <span className="text-[#39FF14] text-xl">SEIS</span></p>
+                    <p className="text-xs text-gray-600 font-bold tracking-widest">[ TEE ENCLAVE ]</p>
+                  </div>
+
+                  {/* Opponent Hand */}
+                  <div className="flex flex-col items-center w-1/3 relative">
+                    <h3 className="text-xl font-bold text-gray-500 mb-2 tracking-wider truncate max-w-full" title={activePlay.player1ShadowName}>{activePlay.player1ShadowName}</h3>
+                    <motion.div
+                      animate={isPlaying ? { y: [0, -40, 0, -40, 0, -40, 0], rotate: [0, 10, -10, 10, -10, 10, 0]} : {}}
+                      transition={{ duration: 0.5, ease: "easeInOut", repeat: isPlaying ? Infinity : 0 }}
+                      className={`w-48 h-48 flex items-center justify-center rounded-2xl transition-all duration-500 border ${duelOutcome === 'DEFEAT' ? 'bg-red-900/40 shadow-[0_0_40px_rgba(255,0,0,0.5)] border-red-500 scale-110 z-20' : 'bg-black border-gray-800'}`}
+                    >
+                      <svg 
+                        className={`w-28 h-28 ${isPlaying ? 'text-[#39FF14]/50 mix-blend-screen scale-110 drop-shadow-[0_0_20px_rgba(57,255,20,0.8)]' : duelOutcome === 'DEFEAT' ? 'text-red-500 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)]' : 'text-gray-300'}`} 
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ filter: isPlaying ? 'url(#glitch)' : 'none' }}
+                      >
+                        <motion.path animate={{ d: opponentPath }} transition={{ duration: duelOutcome ? 0.3 : 0 }} />
+                      </svg>
+                    </motion.div>
+                  </div>
                 </div>
 
-                <div className="text-4xl font-bold text-gray-600">VS</div>
-
-                {/* Opponent Hand */}
-                <div className="flex flex-col items-center w-1/2">
-                  <h3 className="text-xl font-bold text-gray-400 mb-6 tracking-wider opacity-50">SHADOW OPPONENT</h3>
-                  <motion.div
-                    animate={
-                      isPlaying ? {
-                        y: [0, -30, 0, -30, 0, -30, 0], // 3-beat Shake sync
-                        rotate: [0, 10, -10, 10, -10, 10, 0] // Mirrored shake
-                      } : {}
-                    }
-                    transition={{ duration: 0.6, ease: "easeInOut", repeat: isPlaying ? Infinity : 0 }}
-                    className={`w-56 h-56 flex flex-col items-center justify-center rounded-3xl transition-all duration-500 ${opponentResult ? 'bg-red-900/10 shadow-[0_0_30px_rgba(255,0,0,0.3)] border border-red-500/50 scale-105' : 'bg-gray-900 border border-gray-800'}`}
-                  >
-                    <svg 
-                      className={`w-32 h-32 ${isPlaying ? 'text-[#39FF14]/30 mix-blend-screen scale-110' : (opponentResult ? 'text-red-500 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)]' : 'text-gray-700')}`} 
-                      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                      style={{ filter: isPlaying ? 'url(#glitch)' : 'none' }}
-                    >
-                      <motion.path animate={{ d: opponentPath }} transition={{ duration: isPlaying ? 0 : 0.5, ease: "easeInOut" }} />
-                    </svg>
-                    {opponentResult && !isPlaying && (
-                      <span className="text-2xl mt-4 font-bold text-red-500 drop-shadow-[0_0_5px_rgba(255,0,0,0.8)]">{opponentResult}</span>
-                    )}
-                  </motion.div>
-                </div>
+                {/* Move Controls */}
+                {!duelOutcome && (
+                  <div className={`mt-16 flex flex-col items-center transition-opacity ${isPlaying ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+                    <p className="text-[#39FF14] mb-4 font-bold tracking-widest text-sm animate-pulse">MATCH SECURED: SELECT YOUR ENCRYPTED SHAPE</p>
+                    <div className="flex gap-4">
+                      {["ROCK", "PAPER", "SCISSORS"].map((move) => (
+                         <button 
+                           key={move}
+                           onClick={() => handleThrow(move as Move)}
+                           disabled={isPlaying || isComputing}
+                           className="px-8 py-4 bg-transparent border-2 border-gray-600 text-white font-bold text-xl rounded hover:border-[#39FF14] hover:text-[#39FF14] hover:shadow-[0_0_20px_rgba(57,255,20,0.4)] transition-all font-mono"
+                         >
+                           {move}
+                         </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
               </div>
-
-              <button 
-                onClick={playRound}
-                disabled={isPlaying}
-                className="px-12 py-5 bg-[#39FF14] text-[#0B0B0B] font-bold text-2xl rounded-sm hover:bg-white hover:text-black transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(57,255,20,0.5)] border border-[#39FF14]"
-              >
-                {isPlaying ? "COMPUTING TEE ENCLAVE..." : "ENGAGE DUEL"}
-              </button>
             </motion.div>
           </AnimatePresence>
         )}
       </main>
 
-      {/* SVG Filters */}
       <svg width="0" height="0" className="hidden">
         <filter id="glitch">
-          <feTurbulence type="fractalNoise" baseFrequency="0.1 0.4" numOctaves="2" result="warp" />
-          <feDisplacementMap xChannelSelector="R" yChannelSelector="G" scale="10" in="SourceGraphic" in2="warp" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.2 0.7" numOctaves="3" result="warp" />
+          <feDisplacementMap xChannelSelector="R" yChannelSelector="G" scale="15" in="SourceGraphic" in2="warp" />
         </filter>
       </svg>
     </div>
