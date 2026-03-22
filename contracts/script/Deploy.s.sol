@@ -6,8 +6,7 @@ import "../src/ShadowDuel.sol";
 
 contract DeployShadowDuel is Script {
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast();
 
         ShadowDuel duel = new ShadowDuel();
 

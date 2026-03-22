@@ -85,6 +85,7 @@ function App() {
         <div>
           <h1 className="text-3xl font-bold tracking-widest text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">SHADOW DUEL</h1>
           <p className="text-sm text-gray-400 mt-1">Encrypted RPS on Seismic Testnet</p>
+          <p className="text-xs text-[#39FF14]/50 mt-1 font-mono">Live on Seismic Testnet: 0x09E52FFBB8a945686Ec2e04a4ed4D48B9bEB0cAc</p>
         </div>
         <div className="flex items-center gap-6">
           {isConnected && (

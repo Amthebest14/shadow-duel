@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@seismic/ShieldedTypes.sol";
+import "./ShieldedTypes.sol";
 
 contract ShadowDuel {
     struct PlayerInfo {
@@ -60,7 +60,7 @@ contract ShadowDuel {
         
         // This executes within the TEE
         // 1=Rock, 2=Paper, 3=Scissors
-        suint diff = (duel.p1Move - duel.p2Move + suint.wrap(3)) % suint.wrap(3);
+        suint diff = suint.wrap((suint.unwrap(duel.p1Move) + 3 - suint.unwrap(duel.p2Move)) % 3);
         
         // Use RNG Precompile (0x64) for ties or loot distribution
         
