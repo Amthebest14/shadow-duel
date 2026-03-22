@@ -18,8 +18,12 @@ function App() {
   const { isConnected } = useAccount();
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
-  const { isReady, shieldedBalance, updateBalance } = useShieldedWallet();
+  const { isReady, shieldedBalance, updateBalance, depositToVault } = useShieldedWallet();
   const { activeDuels, playHand, isComputing } = useDuel();
+
+  // Lobby Navigation State
+  const [lobbyView, setLobbyView] = useState<'SELECTION' | 'PRIVATE' | 'QUICK'>('SELECTION');
+  const [privateCode, setPrivateCode] = useState('');
 
   // Selected Duel Game State
   const [activePlay, setActivePlay] = useState<ActiveDuel | null>(null);
@@ -85,7 +89,7 @@ function App() {
         <div>
           <h1 className="text-3xl font-bold tracking-widest text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">SHADOW DUEL</h1>
           <p className="text-sm text-gray-400 mt-1">Encrypted RPS on Seismic Testnet</p>
-          <p className="text-xs text-[#39FF14]/50 mt-1 font-mono">Live on Seismic Testnet: 0x09E52FFBB8a945686Ec2e04a4ed4D48B9bEB0cAc</p>
+          <p className="text-xs text-[#39FF14]/50 mt-1 font-mono">Live on Seismic Testnet: 0xBA0FbC0053336B622784DB8BD7eFa2e21FE802aE</p>
         </div>
         <div className="flex items-center gap-6">
           {isConnected && (
@@ -96,9 +100,16 @@ function App() {
                </div>
                <div className="flex items-center gap-2 mt-1">
                  {!isReady && <span className="w-3 h-3 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin"></span>}
-                 <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
-                   Bal: <span className="text-[#39FF14]">{shieldedBalance || "---."}</span>
-                 </p>
+                 <div className="flex items-center gap-3">
+                   <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
+                     Bal: <span className="text-[#39FF14]">{shieldedBalance || "---."}</span>
+                   </p>
+                   {isReady && (
+                     <button onClick={() => depositToVault(5.00)} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
+                       DEPOSIT +5 SEIS
+                     </button>
+                   )}
+                 </div>
                </div>
              </div>
           )}
@@ -137,25 +148,53 @@ function App() {
           </div>
         ) : !activePlay ? (
           // LOBBY UI
-          <div className="w-full">
-            <h2 className="text-2xl font-bold text-white mb-6 border-b border-white/10 pb-4">ACTIVE DUELS</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {activeDuels.map(duel => (
-                <div key={duel.id} className="glass-panel p-6 bg-black/60 border border-white/5 hover:border-[#39FF14]/50 transition-colors flex justify-between items-center">
-                  <div>
-                    <p className="text-[#39FF14] font-bold text-xl drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">{duel.wager.toFixed(2)} SEIS</p>
-                    <p className="text-gray-500 text-sm mt-1">Host: <span className="text-gray-300 font-bold">{duel.player1ShadowName}</span></p>
-                    <p className="text-yellow-600 text-xs mt-2 animate-pulse">Waiting for Player 2...</p>
-                  </div>
-                  <button 
-                    onClick={() => setActivePlay(duel)}
-                     className="px-6 py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all hover:shadow-[0_0_15px_rgba(57,255,20,0.5)]"
-                  >
-                    JOIN DUEL
-                  </button>
+          <div className="w-full flex flex-col items-center">
+             {lobbyView === 'SELECTION' && (
+                <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <div className="glass-panel p-8 bg-black/60 border border-[#39FF14]/20 hover:border-[#39FF14] hover:shadow-[0_0_30px_rgba(57,255,20,0.3)] transition-all flex flex-col items-center justify-center cursor-pointer group" onClick={() => setLobbyView('QUICK')}>
+                      <h2 className="text-2xl font-bold text-[#39FF14] mb-2 tracking-widest">QUICK MATCH</h2>
+                      <p className="text-gray-400 text-center text-sm">Join the random matchmaking queue for 1-Block finality execution.</p>
+                   </div>
+                   <div className="glass-panel p-8 bg-black/60 border border-white/10 hover:border-[#39FF14]/50 transition-all flex flex-col items-center justify-center">
+                      <h2 className="text-2xl font-bold text-white mb-4 tracking-widest">PRIVATE LOBBY</h2>
+                      <input 
+                         type="text" 
+                         maxLength={4}
+                         placeholder="0000"
+                         value={privateCode}
+                         onChange={(e) => setPrivateCode(e.target.value.replace(/\D/g, ''))}
+                         className="w-full text-center text-4xl font-black bg-black border-2 border-gray-800 text-[#39FF14] focus:border-[#39FF14] focus:shadow-[0_0_20px_rgba(57,255,20,0.6)] focus:outline-none rounded-lg py-4 mb-4 tracking-[1em] placeholder-gray-800"
+                      />
+                      <button onClick={() => setLobbyView('PRIVATE')} className="w-full py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all disabled:opacity-50" disabled={privateCode.length !== 4}>ENTER VAULT</button>
+                   </div>
                 </div>
-              ))}
-            </div>
+             )}
+
+             {(lobbyView === 'QUICK' || lobbyView === 'PRIVATE') && (
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                    <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{lobbyView === 'QUICK' ? 'ACTIVE RANDOM QUEUE' : `PRIVATE VAULTS MATCHING (${privateCode})`}</h2>
+                    <button onClick={() => setLobbyView('SELECTION')} className="text-sm text-gray-500 hover:text-[#39FF14]">← BACK TO SELECTION</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {activeDuels.map(duel => (
+                      <div key={duel.id} className="glass-panel p-6 bg-black/60 border border-white/5 hover:border-[#39FF14]/50 transition-colors flex justify-between items-center">
+                        <div>
+                          <p className="text-[#39FF14] font-bold text-xl drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">{duel.wager.toFixed(2)} SEIS</p>
+                          <p className="text-gray-500 text-sm mt-1">Host: <span className="text-gray-300 font-bold">{duel.player1ShadowName}</span></p>
+                          <p className="text-yellow-600 text-xs mt-2 animate-pulse">{lobbyView === 'PRIVATE' ? 'Code Verified. Waiting for Player 2...' : 'Waiting for Player 2...'}</p>
+                        </div>
+                        <button 
+                          onClick={() => setActivePlay(duel)}
+                           className="px-6 py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all hover:shadow-[0_0_15px_rgba(57,255,20,0.5)]"
+                        >
+                          JOIN DUEL
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+             )}
           </div>
         ) : (
           // DUEL ARENA UI

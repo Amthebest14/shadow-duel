@@ -5,12 +5,14 @@ interface ShieldedWalletContextType {
   isReady: boolean;
   shieldedBalance: string | null;
   updateBalance: (delta: number) => void;
+  depositToVault: (amount: number) => Promise<void>;
 }
 
 const ShieldedWalletContext = createContext<ShieldedWalletContextType>({
   isReady: false,
   shieldedBalance: null,
   updateBalance: () => {},
+  depositToVault: async () => {},
 });
 
 export const ShieldedWalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,8 +41,18 @@ export const ShieldedWalletProvider: React.FC<{ children: React.ReactNode }> = (
     setShieldedBalance(`${(current + delta).toFixed(2)} SEIS`);
   };
 
+  const depositToVault = async (amount: number) => {
+    // Simulating ETH transaction to Vault
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        updateBalance(amount);
+        resolve();
+      }, 800);
+    });
+  };
+
   return (
-    <ShieldedWalletContext.Provider value={{ isReady, shieldedBalance, updateBalance }}>
+    <ShieldedWalletContext.Provider value={{ isReady, shieldedBalance, updateBalance, depositToVault }}>
       {children}
     </ShieldedWalletContext.Provider>
   );
