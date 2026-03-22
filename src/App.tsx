@@ -19,7 +19,7 @@ function App() {
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
   const { isReady, shieldedBalance, updateBalance, depositToVault } = useShieldedWallet();
-  const { playHand, isComputing } = useDuel();
+  const { playHand, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch } = useDuel();
 
   // Lobby Navigation State
   const [lobbyView, setLobbyView] = useState<'SELECTION' | 'HOST' | 'JOIN'>('SELECTION');
@@ -79,14 +79,16 @@ function App() {
     setLobbyView('SELECTION');
   };
 
-  const handleQuickSearch = () => {
+  const handleQuickSearch = async () => {
     setIsSearching(true);
-    // Simulate 3-5 seconds queue block wait
-    setTimeout(() => {
-        setIsSearching(false);
-        // Force start duel
+    try {
+        await joinQuickMatch();
         setActivePlay({ id: "999", wager: 0.1, player1ShadowName: "SHADOW#8821" });
-    }, Math.random() * 2000 + 3000);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsSearching(false);
+    }
   };
 
 
@@ -215,7 +217,15 @@ function App() {
                      <input type="text" maxLength={4} placeholder="0000" value={privateCode} onChange={(e) => setPrivateCode(e.target.value.replace(/\D/g, ''))} className="w-full text-center text-4xl font-black bg-[#000000] border-2 border-gray-800 text-[#39FF14] focus:border-[#39FF14] focus:shadow-[0_0_20px_rgba(57,255,20,0.6)] focus:outline-none rounded-lg py-4 tracking-[1em] placeholder-gray-800" />
                    </div>
                    
-                   <button onClick={() => {}} className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4 || !hostWager}>INITIATE CSTORE</button>
+                   <button onClick={async () => {
+                     try {
+                       await createPrivateDuel(privateCode, parseFloat(hostWager));
+                       setActivePlay({ id: "1000", wager: parseFloat(hostWager), player1ShadowName: "WAITING_OPPONENT" });
+                       setLobbyView('SELECTION');
+                     } catch (e) {
+                       console.error(e);
+                     }
+                   }} className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4 || !hostWager || isComputing}>INITIATE CSTORE</button>
                 </div>
              )}
 
@@ -230,11 +240,15 @@ function App() {
                    </div>
                    
                    <button 
-                     onClick={() => {
-                        // simulate validation bypass 
-                        setActivePlay({ id: "888", wager: parseFloat(hostWager), player1ShadowName: "HOST#2918" });
+                     onClick={async () => {
+                        try {
+                          await joinPrivateDuel("888", privateCode);
+                          setActivePlay({ id: "888", wager: parseFloat(hostWager) || 0.1, player1ShadowName: "HOST#2918" });
+                        } catch (e) {
+                          console.error(e);
+                        }
                      }}
-                     className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4}
+                     className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4 || isComputing}
                    >
                      EVALUATE CLOAD
                    </button>
