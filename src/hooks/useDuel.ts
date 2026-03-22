@@ -12,11 +12,6 @@ export interface ActiveDuel {
 export function useDuel() {
   const { address } = useAccount();
 
-  const [activeDuels, setActiveDuels] = useState<ActiveDuel[]>([
-    { id: "duel-001", wager: 2.5, player1ShadowName: "Shadow_0x...Ab3F" },
-    { id: "duel-002", wager: 10.0, player1ShadowName: "Shadow_0x...C99b" }
-  ]);
-
   const [isComputing, setIsComputing] = useState(false);
 
   // Mocks creating a new duel via useShieldedWrite
@@ -25,20 +20,11 @@ export function useDuel() {
     console.log(`[TEE Enclave] Shielding Duel Creation... Wager: ${wagerAmount} (suint)`);
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const shortAddr = address ? `${address.substring(0,6)}...${address.slice(-4)}` : "Unknown";
-    const shadowName = `Shadow_${shortAddr}`;
-    
-    setActiveDuels(prev => [...prev, { 
-      id: `duel-${Math.floor(Math.random()*1000)}`, 
-      wager: wagerAmount, 
-      player1ShadowName: shadowName 
-    }]);
-    
     setIsComputing(false);
   }, [address]);
 
   // Mocks joining an existing duel and resolving it via useShieldedWrite
-  const playHand = useCallback(async (duelId: string, move: Move, wager: number) => {
+  const playHand = useCallback(async (_duelId: string, move: Move, wager: number) => {
     setIsComputing(true);
     
     // Simulate Encrypting move and wager as `suint`
@@ -66,15 +52,14 @@ export function useDuel() {
       result = "DEFEAT";
     }
 
-    // Remove the duel from the active lobby
-    setActiveDuels(prev => prev.filter(d => d.id !== duelId));
+    // Duel is no longer in active queue
+    setIsComputing(false);
     setIsComputing(false);
 
     return { opponentMove, result, payoutDelta: result === "VICTORY" ? wager : result === "DEFEAT" ? -wager : 0 };
   }, []);
 
   return {
-    activeDuels,
     isComputing,
     playHand,
     createDuel

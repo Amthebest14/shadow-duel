@@ -95,6 +95,7 @@ contract ShadowDuel {
     // ============================================
     function joinRandomQueue(suint _wager) external {
         uint256 wagerAmount = suint.unwrap(_wager);
+        require(wagerAmount == 0.1 ether, "Quick Match requires exactly 0.1 SEIS");
         require(suint.unwrap(shieldedBalances[msg.sender]) >= wagerAmount, "Insufficient Shielded Balance");
         
         // Deduct Wager inside TEE

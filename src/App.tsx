@@ -19,11 +19,13 @@ function App() {
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
   const { isReady, shieldedBalance, updateBalance, depositToVault } = useShieldedWallet();
-  const { activeDuels, playHand, isComputing } = useDuel();
+  const { playHand, isComputing } = useDuel();
 
   // Lobby Navigation State
-  const [lobbyView, setLobbyView] = useState<'SELECTION' | 'PRIVATE' | 'QUICK'>('SELECTION');
+  const [lobbyView, setLobbyView] = useState<'SELECTION' | 'HOST' | 'JOIN'>('SELECTION');
   const [privateCode, setPrivateCode] = useState('');
+  const [hostWager, setHostWager] = useState('0.1');
+  const [isSearching, setIsSearching] = useState(false);
 
   // Selected Duel Game State
   const [activePlay, setActivePlay] = useState<ActiveDuel | null>(null);
@@ -74,13 +76,25 @@ function App() {
     setOpponentResult(null);
     setDuelOutcome(null);
     setIsPlaying(false);
+    setLobbyView('SELECTION');
   };
+
+  const handleQuickSearch = () => {
+    setIsSearching(true);
+    // Simulate 3-5 seconds queue block wait
+    setTimeout(() => {
+        setIsSearching(false);
+        // Force start duel
+        setActivePlay({ id: 999, wager: 0.1, player1ShadowName: "SHADOW#8821" });
+    }, Math.random() * 2000 + 3000);
+  };
+
 
   const playerPath = isPlaying || !playerResult ? SVGS.FIST : SVGS[playerResult];
   const opponentPath = isPlaying ? GLITCH_PATHS[glitchIndex] : (!opponentResult ? SVGS.FIST : SVGS[opponentResult]);
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] flex flex-col items-center p-6 relative overflow-x-hidden font-mono antialiased">
+    <div className="min-h-screen bg-[#000000] flex flex-col items-center p-6 relative overflow-x-hidden font-mono antialiased">
       <div className="fixed top-[-10%] left-[-10%] w-96 h-96 bg-[#39FF14]/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-[#39FF14]/5 rounded-full blur-[100px] pointer-events-none" />
 
@@ -147,52 +161,83 @@ function App() {
             <p className="text-gray-400 max-w-md">Wallet connection required. All matchmaking and moves are cryptographically shielded by the Seismic TEE.</p>
           </div>
         ) : !activePlay ? (
-          // LOBBY UI
           <div className="w-full flex flex-col items-center">
-             {lobbyView === 'SELECTION' && (
-                <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-8">
-                   <div className="glass-panel p-8 bg-black/60 border border-[#39FF14]/20 hover:border-[#39FF14] hover:shadow-[0_0_30px_rgba(57,255,20,0.3)] transition-all flex flex-col items-center justify-center cursor-pointer group" onClick={() => setLobbyView('QUICK')}>
-                      <h2 className="text-2xl font-bold text-[#39FF14] mb-2 tracking-widest">QUICK MATCH</h2>
-                      <p className="text-gray-400 text-center text-sm">Join the random matchmaking queue for 1-Block finality execution.</p>
-                   </div>
-                   <div className="glass-panel p-8 bg-black/60 border border-white/10 hover:border-[#39FF14]/50 transition-all flex flex-col items-center justify-center">
-                      <h2 className="text-2xl font-bold text-white mb-4 tracking-widest">PRIVATE LOBBY</h2>
-                      <input 
-                         type="text" 
-                         maxLength={4}
-                         placeholder="0000"
-                         value={privateCode}
-                         onChange={(e) => setPrivateCode(e.target.value.replace(/\D/g, ''))}
-                         className="w-full text-center text-4xl font-black bg-black border-2 border-gray-800 text-[#39FF14] focus:border-[#39FF14] focus:shadow-[0_0_20px_rgba(57,255,20,0.6)] focus:outline-none rounded-lg py-4 mb-4 tracking-[1em] placeholder-gray-800"
+             {isSearching ? (
+                <div className="w-full max-w-2xl p-16 flex flex-col items-center justify-center bg-[#000000] border border-[#39FF14] shadow-[0_0_40px_rgba(57,255,20,0.3)] rounded-xl relative overflow-hidden">
+                   <div className="absolute inset-0 bg-[#39FF14]/5" />
+                   <h2 className="text-3xl font-black text-[#39FF14] mb-8 animate-pulse tracking-widest relative z-10 text-center">SEARCHING FOR OPPONENT...</h2>
+                   <div className="w-full h-2 bg-gray-900 overflow-hidden relative border border-white/5 rounded">
+                      <motion.div 
+                        initial={{ x: "-100%" }}
+                        animate={{ x: "100%" }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                        className="w-1/2 h-full bg-[#39FF14] shadow-[0_0_20px_rgba(57,255,20,0.8)]"
                       />
-                      <button onClick={() => setLobbyView('PRIVATE')} className="w-full py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all disabled:opacity-50" disabled={privateCode.length !== 4}>ENTER VAULT</button>
+                   </div>
+                   <p className="text-gray-500 font-mono mt-6 tracking-widest relative z-10">[ WAGER: 0.10 SEIS SECURED ]</p>
+                </div>
+             ) : lobbyView === 'SELECTION' && (
+                <div className="w-full max-w-3xl flex flex-col gap-6 mt-4">
+                   <button 
+                     onClick={handleQuickSearch}
+                     className="w-full relative overflow-hidden group glass-panel p-8 bg-[#000000] border border-[#39FF14]/50 hover:border-[#39FF14] hover:shadow-[0_0_40px_rgba(57,255,20,0.4)] transition-all flex flex-col items-center justify-center rounded-xl"
+                   >
+                     <div className="absolute inset-0 bg-[#39FF14]/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-in-out" />
+                     <h2 className="text-3xl font-black text-[#39FF14] mb-2 tracking-widest relative z-10">QUICK SEARCH</h2>
+                     <p className="text-gray-400 text-sm font-mono relative z-10">STATIONARY WAGER: 0.10 SEIS (1-BLOCK FINALITY)</p>
+                   </button>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                     <button onClick={() => setLobbyView('HOST')} className="glass-panel p-8 bg-[#000000] border border-white/10 hover:border-[#39FF14]/50 transition-all flex flex-col items-center justify-center rounded-xl">
+                        <h2 className="text-2xl font-bold text-white tracking-widest">HOST DUEL</h2>
+                        <p className="text-gray-500 text-xs mt-2 font-mono text-center">Create encrypted 4-digit TEE lobby</p>
+                     </button>
+                     <button onClick={() => setLobbyView('JOIN')} className="glass-panel p-8 bg-[#000000] border border-white/10 hover:border-[#39FF14]/50 transition-all flex flex-col items-center justify-center rounded-xl">
+                        <h2 className="text-2xl font-bold text-white tracking-widest">JOIN DUEL</h2>
+                        <p className="text-gray-500 text-xs mt-2 font-mono text-center">Execute CLOAD bypass to enter</p>
+                     </button>
                    </div>
                 </div>
              )}
 
-             {(lobbyView === 'QUICK' || lobbyView === 'PRIVATE') && (
-                <div className="w-full">
-                  <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
-                    <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{lobbyView === 'QUICK' ? 'ACTIVE RANDOM QUEUE' : `PRIVATE VAULTS MATCHING (${privateCode})`}</h2>
-                    <button onClick={() => setLobbyView('SELECTION')} className="text-sm text-gray-500 hover:text-[#39FF14]">← BACK TO SELECTION</button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {activeDuels.map(duel => (
-                      <div key={duel.id} className="glass-panel p-6 bg-black/60 border border-white/5 hover:border-[#39FF14]/50 transition-colors flex justify-between items-center">
-                        <div>
-                          <p className="text-[#39FF14] font-bold text-xl drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">{duel.wager.toFixed(2)} SEIS</p>
-                          <p className="text-gray-500 text-sm mt-1">Host: <span className="text-gray-300 font-bold">{duel.player1ShadowName}</span></p>
-                          <p className="text-yellow-600 text-xs mt-2 animate-pulse">{lobbyView === 'PRIVATE' ? 'Code Verified. Waiting for Player 2...' : 'Waiting for Player 2...'}</p>
-                        </div>
-                        <button 
-                          onClick={() => setActivePlay(duel)}
-                           className="px-6 py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all hover:shadow-[0_0_15px_rgba(57,255,20,0.5)]"
-                        >
-                          JOIN DUEL
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+             {lobbyView === 'HOST' && !isSearching && (
+                <div className="w-full max-w-xl glass-panel p-8 bg-[#000000] border border-[#39FF14]/30 flex flex-col items-center justify-center rounded-xl relative mt-4">
+                   <button onClick={() => setLobbyView('SELECTION')} className="absolute top-4 left-4 text-xs text-gray-500 hover:text-[#39FF14] tracking-widest font-mono">← ABORT</button>
+                   <h2 className="text-2xl font-black text-white mb-8 tracking-widest mt-4">HOST PRIVATE DUEL</h2>
+                   
+                   <div className="w-full mb-6">
+                     <p className="text-[#39FF14] font-mono text-sm mb-2 drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">SHIELDED WAGER (SEIS)</p>
+                     <input type="number" step="0.1" value={hostWager} onChange={(e) => setHostWager(e.target.value)} className="w-full bg-black border-2 border-gray-800 text-white focus:border-[#39FF14] focus:outline-none rounded-lg p-4 font-mono text-xl" />
+                   </div>
+
+                   <div className="w-full mb-8">
+                     <p className="text-[#39FF14] font-mono text-sm mb-2 drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">ENCRYPTED 4-DIGIT CODE</p>
+                     <input type="text" maxLength={4} placeholder="0000" value={privateCode} onChange={(e) => setPrivateCode(e.target.value.replace(/\D/g, ''))} className="w-full text-center text-4xl font-black bg-[#000000] border-2 border-gray-800 text-[#39FF14] focus:border-[#39FF14] focus:shadow-[0_0_20px_rgba(57,255,20,0.6)] focus:outline-none rounded-lg py-4 tracking-[1em] placeholder-gray-800" />
+                   </div>
+                   
+                   <button onClick={() => {}} className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4 || !hostWager}>INITIATE CSTORE</button>
+                </div>
+             )}
+
+             {lobbyView === 'JOIN' && !isSearching && (
+                <div className="w-full max-w-xl glass-panel p-8 bg-[#000000] border border-[#39FF14]/30 flex flex-col items-center justify-center rounded-xl relative mt-4">
+                   <button onClick={() => setLobbyView('SELECTION')} className="absolute top-4 left-4 text-xs text-gray-500 hover:text-[#39FF14] tracking-widest font-mono">← ABORT</button>
+                   <h2 className="text-2xl font-black text-white mb-8 tracking-widest mt-4">JOIN PRIVATE DUEL</h2>
+
+                   <div className="w-full mb-8">
+                     <p className="text-[#39FF14] font-mono text-sm mb-2 drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">ACCESS CODE</p>
+                     <input type="text" maxLength={4} placeholder="0000" value={privateCode} onChange={(e) => setPrivateCode(e.target.value.replace(/\D/g, ''))} className="w-full text-center text-4xl font-black bg-[#000000] border-2 border-gray-800 text-[#39FF14] focus:border-[#39FF14] focus:shadow-[0_0_20px_rgba(57,255,20,0.6)] focus:outline-none rounded-lg py-4 tracking-[1em] placeholder-gray-800" />
+                   </div>
+                   
+                   <button 
+                     onClick={() => {
+                        // simulate validation bypass 
+                        setActivePlay({ id: 888, wager: parseFloat(hostWager), player1ShadowName: "HOST#2918" });
+                     }}
+                     className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4}
+                   >
+                     EVALUATE CLOAD
+                   </button>
                 </div>
              )}
           </div>

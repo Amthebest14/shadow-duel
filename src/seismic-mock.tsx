@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useBalance } from 'wagmi';
 
 interface ShieldedWalletContextType {
   isReady: boolean;
@@ -16,9 +16,19 @@ const ShieldedWalletContext = createContext<ShieldedWalletContextType>({
 });
 
 export const ShieldedWalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
+  const { data: balanceData, refetch: refetchBalance } = useBalance({ address });
   const [isReady, setIsReady] = useState(false);
   const [shieldedBalance, setShieldedBalance] = useState<string | null>(null);
+
+  // Sync actual Wagmi testnet balance into the Shielded State representation
+  useEffect(() => {
+    if (balanceData) {
+      setShieldedBalance(`${parseFloat(balanceData.formatted).toFixed(2)} SEIS`);
+    } else {
+      setShieldedBalance(null);
+    }
+  }, [balanceData]);
 
   useEffect(() => {
     const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
@@ -26,7 +36,6 @@ export const ShieldedWalletProvider: React.FC<{ children: React.ReactNode }> = (
       // Simulate shielded connection setup
       const timer = setTimeout(() => {
         setIsReady(true);
-        setShieldedBalance("10.50 SEIS");
       }, 1500);
       return () => clearTimeout(timer);
     } else {
@@ -35,10 +44,11 @@ export const ShieldedWalletProvider: React.FC<{ children: React.ReactNode }> = (
     }
   }, [isConnected]);
 
-  const updateBalance = (delta: number) => {
-    if (!shieldedBalance) return;
-    const current = parseFloat(shieldedBalance.split(' ')[0]);
-    setShieldedBalance(`${(current + delta).toFixed(2)} SEIS`);
+  const updateBalance = (_delta?: number) => {
+    // When a duel is resolved, instantly refetch the real on-chain Testnet Vault ETH.
+    setTimeout(() => {
+      refetchBalance();
+    }, 500); // 1-Block finality sync
   };
 
   const depositToVault = async (amount: number) => {
