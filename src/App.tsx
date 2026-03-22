@@ -85,7 +85,7 @@ function App() {
     setTimeout(() => {
         setIsSearching(false);
         // Force start duel
-        setActivePlay({ id: 999, wager: 0.1, player1ShadowName: "SHADOW#8821" });
+        setActivePlay({ id: "999", wager: 0.1, player1ShadowName: "SHADOW#8821" });
     }, Math.random() * 2000 + 3000);
   };
 
@@ -232,7 +232,7 @@ function App() {
                    <button 
                      onClick={() => {
                         // simulate validation bypass 
-                        setActivePlay({ id: 888, wager: parseFloat(hostWager), player1ShadowName: "HOST#2918" });
+                        setActivePlay({ id: "888", wager: parseFloat(hostWager), player1ShadowName: "HOST#2918" });
                      }}
                      className="w-full py-4 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] font-black tracking-widest rounded-lg hover:bg-[#39FF14] hover:text-[#000000] transition-all disabled:opacity-50" disabled={privateCode.length !== 4}
                    >
