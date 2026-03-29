@@ -19,7 +19,7 @@ function App() {
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
   const { isReady, walletBalance, refreshBalance } = useSeismic();
-  const { commitMove, resolveDuel, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch, lastResolution, activeMatchId } = useDuel();
+  const { commitMove, resolveDuel, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch, lastResolution, activeMatchId, setActiveMatchId } = useDuel();
 
   // Lobby Navigation State
   const [lobbyView, setLobbyView] = useState<'SELECTION' | 'HOST' | 'JOIN'>('SELECTION');

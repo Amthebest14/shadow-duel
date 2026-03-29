@@ -14,8 +14,7 @@ export interface ActiveDuel {
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`;
 
 export function useDuel() {
-  const { address } = useAccount();
-  const publicClient = usePublicClient();
+  const { publicClient } = usePublicClient(); // Corrected usage
   const { writeContractAsync } = useWriteContract();
 
   const [isComputing, setIsComputing] = useState(false);
