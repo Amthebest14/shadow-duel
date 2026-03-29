@@ -51,7 +51,7 @@ function App() {
   // Handle on-chain event synchronization
   useEffect(() => {
     if (activeMatchId && !activePlay) {
-      console.log("[App] Match found, transitioning to SELECTION.");
+      console.log("[App] Match found, transitioning to Arena. ID:", activeMatchId);
       setActivePlay({ 
         id: activeMatchId, 
         wager: lobbyView === 'HOST' ? parseFloat(hostWager) : 0.1, 
@@ -61,6 +61,14 @@ function App() {
       setLobbyView('SELECTION');
     }
   }, [activeMatchId, activePlay, lobbyView, hostWager]);
+
+  // Safety: If match found, stop searching regardless
+  useEffect(() => {
+    if (activeMatchId && isSearching) {
+        console.log("[App] Match ID detected while searching. Force stopping search.");
+        setIsSearching(false);
+    }
+  }, [activeMatchId, isSearching]);
 
   useEffect(() => {
     if (lastResolution && activePlay && lastResolution.duelId === activePlay.id) {

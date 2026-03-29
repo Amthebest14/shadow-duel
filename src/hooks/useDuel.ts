@@ -14,7 +14,7 @@ export interface ActiveDuel {
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`;
 
 export function useDuel() {
-  const publicClient = usePublicClient(); 
+  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
   const [isComputing, setIsComputing] = useState(false);
@@ -25,6 +25,7 @@ export function useDuel() {
   } | null>(null);
 
   const processLogs = useCallback((logs: any[]) => {
+    console.log(`[TEE Enclave] Processing ${logs.length} logs...`);
     logs.forEach((log) => {
       try {
         const decoded = decodeEventLog({
@@ -33,28 +34,29 @@ export function useDuel() {
           topics: log.topics,
         });
 
+        console.log(`[TEE Enclave] Decoded Event: ${decoded.eventName}`, decoded.args);
+
         if (decoded.eventName === 'MatchFound' || decoded.eventName === 'DuelCreated' || decoded.eventName === 'PlayerJoined') {
           const duelId = (decoded.args as any).duelId;
           if (duelId !== undefined) {
-            console.log(`[TEE Enclave] Event Detected: ${decoded.eventName} | ID: ${duelId}`);
-            setActiveMatchId(duelId.toString());
+             const idStr = duelId.toString();
+             console.log(`[TEE Enclave] Setting Active Match: ${idStr}`);
+             setActiveMatchId(idStr);
           }
         }
         
         if (decoded.eventName === 'DuelResolved') {
             const { duelId, winner } = decoded.args as any;
             if (duelId !== undefined && winner !== undefined) {
-              console.log(`[TEE Enclave] Duel Resolved on-chain! ID: ${duelId}, Winner: ${winner}`);
               setLastResolution({ duelId: duelId.toString(), winner });
             }
         }
       } catch (e) {
-        // Skip logs that don't match our ABI/Events
+        // Log mismatch is common for internal txs, skip silently
       }
     });
   }, []);
 
-  // Background listener for events from other players
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: shadowDuelAbi,
@@ -129,8 +131,11 @@ export function useDuel() {
       });
 
       if (publicClient) {
+        console.log("[TEE Enclave] Waiting for Match confirmation...");
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         processLogs(receipt.logs);
+        // Special Case: If we finish here and still no match ID, 
+        // it means we are the "Host" of this new queue item.
       }
       return hash;
     } catch (err) {
