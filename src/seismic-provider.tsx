@@ -29,13 +29,15 @@ export const SeismicProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // In a real Seismic environment, this would involve a Signed Read via SDK.
   // For this version, we call the contract's getShieldedBalance view function.
-  const { data: rawBalance, refetch: refetchShielded } = useReadContract({
+  const { data: rawBalance, refetch: refetchShielded, isError } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: shadowDuelAbi,
     functionName: 'getShieldedBalance',
     args: [address as `0x${string}`],
+    account: address, // Critical to satisfy getShieldedBalance's msg.sender == user check
     query: {
         enabled: !!address,
+        retry: 2,
     }
   });
 
@@ -43,11 +45,12 @@ export const SeismicProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (rawBalance !== undefined) {
       setShieldedBalance(`${formatEther(rawBalance as bigint)} SEIS`);
       setIsReady(true);
-    } else {
-      setShieldedBalance(null);
-      setIsReady(false);
+    } else if (isError) {
+      console.error("[Seismic] Failed to read shielded balance.");
+      setShieldedBalance("0.00 SEIS");
+      setIsReady(true); // Fail gracefully so the app doesn't stay stuck
     }
-  }, [rawBalance]);
+  }, [rawBalance, isError]);
 
   const refreshBalance = useCallback(async () => {
     await refetchShielded();
