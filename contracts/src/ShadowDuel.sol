@@ -23,9 +23,6 @@ contract ShadowDuel {
     mapping(uint256 => DuelInfo) private duels;
     mapping(uint256 => suint) private gameCodes;
     
-    // Shielded Balances
-    mapping(address => suint) private shieldedBalances;
-    
     uint256[] public randomQueue;
     uint256 public nextDuelId;
 
@@ -36,29 +33,11 @@ contract ShadowDuel {
     event DuelResolved(uint256 indexed duelId, address winner);
 
     // ============================================
-    // SHIELDED BALANCE & VAULT
-    // ============================================
-    function deposit() external payable {
-        // CSTORE: Convert public ETH to private Shielded Balance
-        uint256 currentBal = suint.unwrap(shieldedBalances[msg.sender]);
-        shieldedBalances[msg.sender] = suint.wrap(currentBal + msg.value);
-    }
-    
-    // Signed Read endpoint for the @seismic-systems/sdk (mocked pattern)
-    function getShieldedBalance(address user) external view returns (suint) {
-        require(msg.sender == user, "Unauthorized Signed Read");
-        return shieldedBalances[user];
-    }
-
-    // ============================================
     // THE 4-DIGIT PRIVATE LOBBY
     // ============================================
-    function createPrivateGame(suint _code, suint _wager) external {
+    function createPrivateGame(suint _code, suint _wager) external payable {
         uint256 wagerAmount = suint.unwrap(_wager);
-        require(suint.unwrap(shieldedBalances[msg.sender]) >= wagerAmount, "Insufficient Shielded Balance");
-        
-        // Deduct Wager inside TEE
-        shieldedBalances[msg.sender] = suint.wrap(suint.unwrap(shieldedBalances[msg.sender]) - wagerAmount);
+        require(msg.value == wagerAmount, "Wager must match msg.value");
 
         uint256 duelId = nextDuelId++;
         
@@ -71,20 +50,17 @@ contract ShadowDuel {
         emit DuelCreated(duelId, true, msg.sender);
     }
 
-    function joinPrivateGame(uint256 duelId, suint _attemptCode) external {
+    function joinPrivateGame(uint256 duelId, suint _attemptCode) external payable {
         DuelInfo storage duel = duels[duelId];
         require(duel.isPrivate, "Not a private game");
         require(!duel.isComplete, "Duel already resolved");
 
         uint256 wagerAmount = suint.unwrap(duel.wager);
-        require(suint.unwrap(shieldedBalances[msg.sender]) >= wagerAmount, "Insufficient Shielded Balance");
+        require(msg.value == wagerAmount, "Wager must match msg.value");
 
         // CLOAD logic strictly inside TEE
         suint diff = suint.wrap(suint.unwrap(gameCodes[duelId]) - suint.unwrap(_attemptCode));
         // TEE evaluates diff == 0 silently
-
-        // Deduct Wager
-        shieldedBalances[msg.sender] = suint.wrap(suint.unwrap(shieldedBalances[msg.sender]) - wagerAmount);
 
         duel.player2 = saddress.wrap(msg.sender);
         emit PlayerJoined(duelId, msg.sender);
@@ -93,13 +69,10 @@ contract ShadowDuel {
     // ============================================
     // RANDOM MATCHMAKING ENGINE
     // ============================================
-    function joinRandomQueue(suint _wager) external {
+    function joinRandomQueue(suint _wager) external payable {
         uint256 wagerAmount = suint.unwrap(_wager);
         require(wagerAmount == 0.1 ether, "Quick Match requires exactly 0.1 SEIS");
-        require(suint.unwrap(shieldedBalances[msg.sender]) >= wagerAmount, "Insufficient Shielded Balance");
-        
-        // Deduct Wager inside TEE
-        shieldedBalances[msg.sender] = suint.wrap(suint.unwrap(shieldedBalances[msg.sender]) - wagerAmount);
+        require(msg.value == wagerAmount, "Incorrect Wager Sent");
 
         if (randomQueue.length > 0) {
             uint256 duelId = randomQueue[randomQueue.length - 1];
@@ -127,8 +100,6 @@ contract ShadowDuel {
     function commitMove(uint256 duelId, suint _move) external {
         require(!duels[duelId].isComplete, "Duel is complete");
         
-        // In full TEE, compare msg.sender == player1 or player2
-        // For simplicity, we just assume tracking logic holds
         if (suint.unwrap(duels[duelId].p1Move) == 0) {
              duels[duelId].p1Move = _move;
         } else {
@@ -142,25 +113,28 @@ contract ShadowDuel {
         DuelInfo storage duel = duels[duelId];
         require(!duel.isComplete, "Already resolved");
         
-        // This executes within the TEE
-        // 1=Rock, 2=Paper, 3=Scissors
         suint diff = suint.wrap((suint.unwrap(duel.p1Move) + 3 - suint.unwrap(duel.p2Move)) % 3);
         
         duel.isComplete = true;
+        uint256 totalPayout = suint.unwrap(duel.wager) * 2;
         
-        // Simulating the TEE payout structure
+        address p1 = saddress.unwrap(duel.player1);
+        address p2 = saddress.unwrap(duel.player2);
+        address winner = address(0);
+
         if (suint.unwrap(diff) == 1) {
-            // Player 1 wins
-            shieldedBalances[saddress.unwrap(duel.player1)] = suint.wrap(suint.unwrap(shieldedBalances[saddress.unwrap(duel.player1)]) + (suint.unwrap(duel.wager) * 2));
+            winner = p1;
+            payable(p1).transfer(totalPayout);
         } else if (suint.unwrap(diff) == 2) {
-            // Player 2 wins
-            shieldedBalances[saddress.unwrap(duel.player2)] = suint.wrap(suint.unwrap(shieldedBalances[saddress.unwrap(duel.player2)]) + (suint.unwrap(duel.wager) * 2));
+            winner = p2;
+            payable(p2).transfer(totalPayout);
         } else {
-            // Draw
-            shieldedBalances[saddress.unwrap(duel.player1)] = suint.wrap(suint.unwrap(shieldedBalances[saddress.unwrap(duel.player1)]) + suint.unwrap(duel.wager));
-            shieldedBalances[saddress.unwrap(duel.player2)] = suint.wrap(suint.unwrap(shieldedBalances[saddress.unwrap(duel.player2)]) + suint.unwrap(duel.wager));
+            // Draw: Refund both
+            uint256 half = totalPayout / 2;
+            payable(p1).transfer(half);
+            payable(p2).transfer(half);
         }
 
-        emit DuelResolved(duelId, msg.sender); 
+        emit DuelResolved(duelId, winner); 
     }
 }

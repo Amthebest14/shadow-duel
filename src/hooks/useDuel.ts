@@ -84,6 +84,7 @@ export function useDuel() {
         abi: shadowDuelAbi,
         functionName: 'createPrivateGame',
         args: [codeBigInt, wagerBigInt],
+        value: wagerBigInt,
       });
 
       if (publicClient) {
@@ -109,6 +110,7 @@ export function useDuel() {
         abi: shadowDuelAbi,
         functionName: 'joinPrivateGame',
         args: [duelIdBigInt, codeBigInt],
+        value: parseEther('0.1'), // Assuming 0.1 for now, ideally fetch from duel.wager
       });
 
       if (publicClient) {
@@ -133,6 +135,7 @@ export function useDuel() {
         abi: shadowDuelAbi,
         functionName: 'joinRandomQueue',
         args: [wagerBigInt],
+        value: wagerBigInt,
       });
 
       if (publicClient) {

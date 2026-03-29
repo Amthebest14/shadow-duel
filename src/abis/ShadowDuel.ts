@@ -10,21 +10,21 @@ export const shadowDuelAbi = [
     "inputs": [{ "internalType": "suint", "name": "_code", "type": "uint256" }, { "internalType": "suint", "name": "_wager", "type": "uint256" }],
     "name": "createPrivateGame",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "duelId", "type": "uint256" }, { "internalType": "suint", "name": "_attemptCode", "type": "uint256" }],
     "name": "joinPrivateGame",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
     "inputs": [{ "internalType": "suint", "name": "_wager", "type": "uint256" }],
     "name": "joinRandomQueue",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {

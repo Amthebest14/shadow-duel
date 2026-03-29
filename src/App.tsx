@@ -18,7 +18,7 @@ function App() {
   const { isConnected, address } = useAccount();
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
-  const { isReady, shieldedBalance, refreshBalance, depositToVault } = useSeismic();
+  const { isReady, walletBalance, refreshBalance } = useSeismic();
   const { commitMove, resolveDuel, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch, lastResolution, activeMatchId } = useDuel();
 
   // Lobby Navigation State
@@ -131,17 +131,11 @@ function App() {
                  <span className={`text-sm ${isReady ? 'text-[#39FF14]' : 'text-gray-400'}`}>{isReady ? 'TEE Secured' : 'Connecting Vault...'}</span>
                </div>
                <div className="flex items-center gap-2 mt-1">
-                 {!isReady && <span className="w-3 h-3 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin"></span>}
-                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
-                     Bal: <span className="text-[#39FF14]">{shieldedBalance || "0.00 SEIS"}</span>
-                   </p>
-                    {isReady && (
-                      <button onClick={() => depositToVault("0.5")} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
-                        DEPOSIT +0.5 SEIS
-                      </button>
-                    )}
-                 </div>
+                     Wallet: <span className="text-[#39FF14]">{walletBalance || "0.0000 SEIS"}</span>
+                    </p>
+                  </div>
                </div>
              </div>
           )}
@@ -192,7 +186,7 @@ function App() {
                         className="w-1/2 h-full bg-[#39FF14] shadow-[0_0_20px_rgba(57,255,20,0.8)]"
                       />
                    </div>
-                   <p className="text-gray-500 font-mono mt-6 tracking-widest relative z-10">[ WAGER: 0.10 SEIS SECURED ]</p>
+                   <p className="text-sm text-gray-500 font-mono mt-6 tracking-widest relative z-10">[ WAGER: 0.10 SEIS SECURED ]</p>
                 </div>
              ) : lobbyView === 'SELECTION' && (
                 <div className="w-full max-w-3xl flex flex-col gap-6 mt-4">
@@ -224,7 +218,7 @@ function App() {
                    <h2 className="text-2xl font-black text-white mb-8 tracking-widest mt-4">HOST PRIVATE DUEL</h2>
                    
                    <div className="w-full mb-6">
-                     <p className="text-[#39FF14] font-mono text-sm mb-2 drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">SHIELDED WAGER (SEIS)</p>
+                     <p className="text-[#39FF14] font-mono text-sm mb-2 drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]">DUEL WAGER (SEIS)</p>
                      <input type="number" step="0.1" value={hostWager} onChange={(e) => setHostWager(e.target.value)} className="w-full bg-black border-2 border-gray-800 text-white focus:border-[#39FF14] focus:outline-none rounded-lg p-4 font-mono text-xl" />
                    </div>
 
