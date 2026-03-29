@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { MeshDistortMaterial, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -15,7 +15,9 @@ function Scene() {
       
       // Dynamic distortion based on time
       const time = state.clock.getElapsedTime();
-      (meshRef.current.material as any).distort = 0.4 + Math.sin(time * 0.5) * 0.1;
+      if (meshRef.current.material) {
+        (meshRef.current.material as any).distort = 0.4 + Math.sin(time * 0.5) * 0.1;
+      }
     }
   });
 
@@ -32,7 +34,6 @@ function Scene() {
             color="#080808"
             envMapIntensity={0.5}
             clearcoat={1}
-            clearcoatOpacity={1}
             reflectivity={0.8}
             metalness={0.2}
             roughness={0}
