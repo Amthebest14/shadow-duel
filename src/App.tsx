@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useSeismic } from './seismic-provider';
-import { useAccount } from 'wagmi';
 import { useDuel, type Move } from './hooks/useDuel';
 
 const SVGS = {
@@ -15,12 +14,12 @@ const SVGS = {
 const GLITCH_PATHS = [SVGS.FIST, SVGS.ROCK, SVGS.PAPER, SVGS.SCISSORS];
 
 function App() {
-  const { isConnected } = useAccount();
   const { isReady, walletBalance, refreshBalance } = useSeismic();
-  const { duelAI, isComputing, lastResolution, setLastResolution, depositHouseFunds } = useDuel();
+  const { duelAI, isComputing, lastResolution, setLastResolution, depositHouseFunds, leaderboard, userAddress } = useDuel();
 
   // Mode Selection
   const [inArena, setInArena] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   
   // Hand Morph Game State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -45,11 +44,9 @@ function App() {
     if (lastResolution) {
        setIsPlaying(false);
        
-       // Map AI move int back to Move type
        const aiMoveStr: Move = lastResolution.aiMove === 1 ? "ROCK" : lastResolution.aiMove === 2 ? "PAPER" : "SCISSORS";
        setOpponentResult(aiMoveStr);
 
-       // Winner detection
        if (lastResolution.winner === "0x0000000000000000000000000000000000000000") {
          setDuelOutcome("DRAW");
        } else if (lastResolution.payout !== "0") {
@@ -85,6 +82,18 @@ function App() {
     setInArena(true);
   };
 
+  const formatAddress = (addr: string) => {
+    if (userAddress && addr.toLowerCase() === userAddress.toLowerCase()) {
+        return <span className="text-[#39FF14] font-bold">YOU ({addr.slice(0, 6)}...{addr.slice(-4)})</span>;
+    }
+    return `${addr.slice(0, 4)}***${addr.slice(-4)}`;
+  };
+
+  const myStats = useMemo(() => {
+    if (!userAddress) return null;
+    return leaderboard.find(e => e.address.toLowerCase() === userAddress.toLowerCase());
+  }, [leaderboard, userAddress]);
+
   const playerPath = isPlaying || (!playerResult && !duelOutcome) ? SVGS.FIST : (playerResult ? SVGS[playerResult] : SVGS.FIST);
   const opponentPath = isPlaying ? GLITCH_PATHS[glitchIndex] : (!opponentResult ? SVGS.FIST : SVGS[opponentResult]);
 
@@ -95,17 +104,28 @@ function App() {
 
       {/* Dashboard */}
       <header className="glass-panel w-full max-w-5xl p-6 mb-8 flex justify-between items-center z-20 border border-white/10 bg-black/40 rounded-xl backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-        <div>
+        <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold tracking-widest text-[#39FF14] drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">SHADOW DUEL</h1>
-          <p className="text-sm text-gray-400 mt-1 uppercase tracking-tight">Encrypted RPS vs Enclave AI</p>
-          <p className="text-xs text-[#39FF14]/50 mt-1 font-mono">ENCLAVE: 0xC296a75fd7cDb9500f8639BE3d35D29f66941C87</p>
+          <div className="flex items-center gap-4">
+             <p className="text-[10px] text-gray-400 uppercase tracking-tight">Encrypted RPS vs Enclave AI</p>
+             <button 
+                onClick={() => setShowLeaderboard(!showLeaderboard)}
+                className={`text-[10px] uppercase font-bold tracking-widest px-3 py-1 rounded-full border transition-all ${
+                    showLeaderboard ? "bg-[#39FF14] text-black border-[#39FF14]" : "text-[#39FF14] border-[#39FF14]/30 hover:bg-[#39FF14]/10"
+                }`}
+             >
+                {showLeaderboard ? "[ CLOSE RANKINGS ]" : "[ VIEW RANKINGS ]"}
+             </button>
+          </div>
         </div>
         <div className="flex items-center gap-6">
-          {isConnected && (
+          {userAddress && (
              <div className="text-right flex flex-col items-end">
                <div className="flex items-center gap-2">
                  <span className={`w-2 h-2 rounded-full ${isReady ? 'bg-[#39FF14] animate-pulse' : 'bg-yellow-500'}`} />
-                 <span className={`text-sm ${isReady ? 'text-[#39FF14]' : 'text-gray-400'}`}>{isReady ? 'TEE Secured' : 'Connecting Vault...'}</span>
+                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                    {isReady ? `TEE SECURED | WINS: ${myStats?.wins || 0}` : 'Connecting Vault...'}
+                 </span>
                </div>
                <div className="flex items-center gap-2 mt-1">
                   <div className="flex items-center gap-3">
@@ -120,9 +140,56 @@ function App() {
         </div>
       </header>
 
-      {/* Arena / Matchmaking View */}
+      {/* Main Container */}
       <main className="flex-1 w-full max-w-5xl flex flex-col items-center justify-center relative z-10 py-12">
-        {!inArena ? (
+        {showLeaderboard ? (
+           <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl glass-panel border border-white/10 bg-black/60 p-12 rounded-[2rem] backdrop-blur-2xl shadow-2xl"
+           >
+              <div className="flex justify-between items-end mb-12">
+                 <div>
+                    <h2 className="text-4xl font-black text-white italic tracking-tighter">THE TOP SHADOWS</h2>
+                    <p className="text-[#39FF14] text-[10px] uppercase tracking-[0.4em] font-bold">Public Enclave Ranking</p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-gray-600 text-[10px] uppercase tracking-widest">Total Players</p>
+                    <p className="text-2xl font-black text-white">{leaderboard.length}</p>
+                 </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                 {leaderboard.map((entry, idx) => (
+                    <div 
+                        key={entry.address}
+                        className={`flex justify-between items-center p-5 rounded-2xl border transition-all ${
+                            userAddress && entry.address.toLowerCase() === userAddress.toLowerCase() 
+                                ? "bg-[#39FF14]/10 border-[#39FF14]/30 shadow-[0_0_20px_rgba(57,255,20,0.1)]" 
+                                : "bg-white/5 border-white/5 hover:bg-white/[0.08]"
+                        }`}
+                    >
+                       <div className="flex items-center gap-6">
+                          <span className="text-xl font-black text-gray-700 italic w-8">#{idx + 1}</span>
+                          <span className="text-sm font-bold text-gray-300 tracking-wider font-mono">
+                             {formatAddress(entry.address)}
+                          </span>
+                       </div>
+                       <div className="flex flex-col items-end">
+                          <span className="text-xs text-gray-500 uppercase tracking-widest font-black">Wins</span>
+                          <span className="text-xl font-black text-white">{entry.wins}</span>
+                       </div>
+                    </div>
+                 ))}
+                 
+                 {leaderboard.length === 0 && (
+                    <div className="text-center py-20 opacity-20 italic">
+                       No data found in enclave.
+                    </div>
+                 )}
+              </div>
+           </motion.div>
+        ) : !inArena ? (
            <div className="max-w-md w-full flex flex-col gap-8 text-center bg-black/40 p-12 border border-white/5 rounded-3xl backdrop-blur-xl">
               <div className="flex flex-col gap-2">
                 <h2 className="text-4xl font-black text-white italic tracking-tighter">THE ARENA AWAITS</h2>
@@ -262,7 +329,7 @@ function App() {
       {/* Footer */}
       <footer className="w-full max-w-5xl mt-auto z-10 flex justify-between p-6 opacity-30">
         <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-black tracking-widest">SHADOW_DUEL_V2.0_STABLE</p>
+          <p className="text-[10px] font-black tracking-widest">SHADOW_DUEL_V2.5_LEADERBOARD</p>
           <p className="text-[8px] font-bold text-gray-500">ENCRYPTED INPUTS SECURED BY TEE</p>
         </div>
         <div className="text-right text-[10px] font-black tracking-widest group cursor-default">

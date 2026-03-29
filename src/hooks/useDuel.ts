@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
+import { useState, useCallback, useEffect } from 'react';
+import { useWriteContract, usePublicClient, useWatchContractEvent, useReadContract, useAccount } from 'wagmi';
 import { parseEther, decodeEventLog } from 'viem';
 import { shadowDuelAbi } from '../abis/ShadowDuel';
 
@@ -7,7 +7,13 @@ export type Move = "ROCK" | "PAPER" | "SCISSORS";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`;
 
+export interface LeaderboardEntry {
+  address: string;
+  wins: number;
+}
+
 export function useDuel() {
+  const { address: userAddress } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
@@ -18,6 +24,28 @@ export function useDuel() {
     winner: string;
     payout: string;
   } | null>(null);
+
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  // Read Leaderboard
+  const { data: leaderboardData, refetch: refetchLeaderboard } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    functionName: 'getLeaderboard',
+  });
+
+  useEffect(() => {
+    if (leaderboardData) {
+      const [addresses, wins] = leaderboardData as [string[], bigint[]];
+      const entries: LeaderboardEntry[] = addresses.map((addr, i) => ({
+        address: addr,
+        wins: Number(wins[i]),
+      }));
+      // Sort by wins descending
+      entries.sort((a, b) => b.wins - a.wins);
+      setLeaderboard(entries);
+    }
+  }, [leaderboardData]);
 
   const processLogs = useCallback((logs: any[]) => {
     logs.forEach((log) => {
@@ -30,17 +58,17 @@ export function useDuel() {
 
         if (decoded.eventName === 'DuelResolved') {
             const { playerMove, aiMove, winner, payout } = decoded.args as any;
-            console.log(`[TEE Enclave] DUEL RESOLVED: You(${playerMove}) vs AI(${aiMove}). Winner: ${winner}`);
             setLastResolution({ 
                 playerMove: Number(playerMove), 
                 aiMove: Number(aiMove), 
                 winner, 
                 payout: payout.toString() 
             });
+            refetchLeaderboard();
         }
       } catch (e) {}
     });
-  }, []);
+  }, [refetchLeaderboard]);
 
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
@@ -96,6 +124,9 @@ export function useDuel() {
     duelAI,
     depositHouseFunds,
     lastResolution,
-    setLastResolution
+    setLastResolution,
+    leaderboard,
+    refetchLeaderboard,
+    userAddress
   };
 }
