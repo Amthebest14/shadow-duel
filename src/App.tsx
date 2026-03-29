@@ -136,11 +136,11 @@ function App() {
                     <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
                      Bal: <span className="text-[#39FF14]">{shieldedBalance || "0.00 SEIS"}</span>
                    </p>
-                   {isReady && (
-                     <button onClick={() => depositToVault("2.0")} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
-                       DEPOSIT +2 SEIS
-                     </button>
-                   )}
+                    {isReady && (
+                      <button onClick={() => depositToVault("0.5")} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
+                        DEPOSIT +0.5 SEIS
+                      </button>
+                    )}
                  </div>
                </div>
              </div>
