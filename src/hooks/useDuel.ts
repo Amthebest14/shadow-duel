@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
+import { useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { parseEther, decodeEventLog } from 'viem';
 import { shadowDuelAbi } from '../abis/ShadowDuel';
 
@@ -14,7 +14,7 @@ export interface ActiveDuel {
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`;
 
 export function useDuel() {
-  const { publicClient } = usePublicClient(); // Corrected usage
+  const publicClient = usePublicClient(); 
   const { writeContractAsync } = useWriteContract();
 
   const [isComputing, setIsComputing] = useState(false);
