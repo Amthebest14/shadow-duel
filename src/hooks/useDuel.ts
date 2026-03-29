@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { parseEther } from 'viem';
 import { shadowDuelAbi } from '../abis/ShadowDuel';
 
@@ -19,11 +19,63 @@ export function useDuel() {
   const { writeContractAsync } = useWriteContract();
 
   const [isComputing, setIsComputing] = useState(false);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [lastResolution, setLastResolution] = useState<{
+    duelId: string;
+    winner: string;
+  } | null>(null);
+
+  // Listen for real-time matchmaking
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    eventName: 'MatchFound',
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const { duelId } = log.args;
+        if (duelId !== undefined) {
+          console.log(`[TEE Enclave] Match Found! ID: ${duelId}`);
+          setActiveMatchId(duelId.toString());
+        }
+      });
+    },
+  });
+
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    eventName: 'PlayerJoined',
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const { duelId, player } = log.args;
+        if (duelId !== undefined && player !== undefined) {
+          console.log(`[TEE Enclave] Player ${player} joined duel ${duelId}`);
+          // If we are the host, this tells us a challenger arrived
+          setActiveMatchId(duelId.toString());
+        }
+      });
+    },
+  });
+
+  // Listen for real-time duel resolutions
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    eventName: 'DuelResolved',
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const { duelId, winner } = log.args;
+        if (duelId !== undefined && winner !== undefined) {
+          console.log(`[TEE Enclave] Duel Resolved on-chain! ID: ${duelId}, Winner: ${winner}`);
+          setLastResolution({ duelId: duelId.toString(), winner });
+        }
+      });
+    },
+  });
 
   const createPrivateDuel = useCallback(async (code: string, wagerAmount: number) => {
     setIsComputing(true);
     try {
-      console.log(`[TEE Enclave] Shielding Duel Creation... Wager: ${wagerAmount} Code: ${code}`);
       const codeBigInt = BigInt(code);
       const wagerBigInt = parseEther(wagerAmount.toString());
 
@@ -34,12 +86,8 @@ export function useDuel() {
         args: [codeBigInt, wagerBigInt],
       });
 
-      console.log(`[TEE Enclave] Tx Hash: ${hash}`);
-      
       if (publicClient) {
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log(`[TEE Enclave] Duel Created in Block ${receipt.blockNumber}`);
-        // We'd parse the logs to get the duel ID here, but for now we rely on the App.tsx state management
+        await publicClient.waitForTransactionReceipt({ hash });
       }
       return hash;
     } catch (err) {
@@ -53,7 +101,6 @@ export function useDuel() {
   const joinPrivateDuel = useCallback(async (duelId: string, code: string) => {
     setIsComputing(true);
     try {
-      console.log(`[TEE Enclave] Joining Duel ${duelId} with Code: ${code}`);
       const duelIdBigInt = BigInt(duelId);
       const codeBigInt = BigInt(code);
 
@@ -79,7 +126,6 @@ export function useDuel() {
   const joinQuickMatch = useCallback(async () => {
     setIsComputing(true);
     try {
-      console.log(`[TEE Enclave] Joining Quick Match Queue...`);
       const wagerBigInt = parseEther('0.1');
 
       const hash = await writeContractAsync({
@@ -101,13 +147,10 @@ export function useDuel() {
     }
   }, [address, writeContractAsync, publicClient]);
 
-  // The actual playHand function which commits the move and waits for resolution
-  const playHand = useCallback(async (duelId: string, move: Move, wager: number) => {
+  const commitMove = useCallback(async (duelId: string, move: Move) => {
     setIsComputing(true);
     try {
       const moveInt = move === "ROCK" ? 1n : move === "PAPER" ? 2n : 3n;
-      console.log(`[TEE Enclave] Encrypting Move: ${moveInt} (suint) | Wager: ${wager} (suint)`);
-
       const duelIdBigInt = BigInt(duelId);
 
       const hash = await writeContractAsync({
@@ -119,31 +162,8 @@ export function useDuel() {
 
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash });
-        console.log(`[TEE Enclave] Move Committed. Waiting for Opponent/Resolution...`);
       }
-
-      // Simulate waiting for DuelResolved event for 500ms since we don't have a backend to constantly call resolveDuel right now or opponent
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Determine winner inside TEE (Simulation for visuals since opponent isn't really playing right now)
-      const outcomes: Move[] = ["ROCK", "PAPER", "SCISSORS"];
-      const opponentMove = outcomes[Math.floor(Math.random() * outcomes.length)];
-      
-      let result: "VICTORY" | "DEFEAT" | "DRAW" = "DRAW";
-      
-      if (move === opponentMove) {
-        result = "DRAW";
-      } else if (
-        (move === "ROCK" && opponentMove === "SCISSORS") || 
-        (move === "PAPER" && opponentMove === "ROCK") || 
-        (move === "SCISSORS" && opponentMove === "PAPER")
-      ) {
-        result = "VICTORY";
-      } else {
-        result = "DEFEAT";
-      }
-
-      return { opponentMove, result, payoutDelta: result === "VICTORY" ? wager : result === "DEFEAT" ? -wager : 0 };
+      return hash;
     } catch (err) {
       console.error(err);
       throw err;
@@ -152,11 +172,36 @@ export function useDuel() {
     }
   }, [writeContractAsync, publicClient]);
 
+  const resolveDuel = useCallback(async (duelId: string) => {
+    setIsComputing(true);
+    try {
+        const duelIdBigInt = BigInt(duelId);
+        const hash = await writeContractAsync({
+            address: CONTRACT_ADDRESS,
+            abi: shadowDuelAbi,
+            functionName: 'resolveDuel',
+            args: [duelIdBigInt],
+        });
+        if (publicClient) {
+            await publicClient.waitForTransactionReceipt({ hash });
+        }
+    } catch (err) {
+        console.error(err);
+        throw err;
+    } finally {
+        setIsComputing(false);
+    }
+  }, [writeContractAsync, publicClient]);
+
   return {
     isComputing,
-    playHand,
     createPrivateDuel,
     joinPrivateDuel,
-    joinQuickMatch
+    joinQuickMatch,
+    commitMove,
+    resolveDuel,
+    lastResolution,
+    activeMatchId,
+    setActiveMatchId
   };
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useShieldedWallet } from './seismic-mock';
+import { useSeismic } from './seismic-provider';
 import { useAccount } from 'wagmi';
 import { useDuel, type Move, type ActiveDuel } from './hooks/useDuel';
 
@@ -15,11 +15,11 @@ const SVGS = {
 const GLITCH_PATHS = [SVGS.FIST, SVGS.ROCK, SVGS.PAPER, SVGS.SCISSORS];
 
 function App() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const isDevBypass = new URLSearchParams(window.location.search).get('bypass') === 'true';
   const effectiveConnected = isConnected || isDevBypass;
-  const { isReady, shieldedBalance, updateBalance, depositToVault } = useShieldedWallet();
-  const { playHand, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch } = useDuel();
+  const { isReady, shieldedBalance, refreshBalance, depositToVault } = useSeismic();
+  const { commitMove, resolveDuel, isComputing, createPrivateDuel, joinPrivateDuel, joinQuickMatch, lastResolution, activeMatchId } = useDuel();
 
   // Lobby Navigation State
   const [lobbyView, setLobbyView] = useState<'SELECTION' | 'HOST' | 'JOIN'>('SELECTION');
@@ -48,26 +48,43 @@ function App() {
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  // Handle on-chain event synchronization
+  useEffect(() => {
+    if (activeMatchId && !activePlay) {
+      setActivePlay({ 
+        id: activeMatchId, 
+        wager: lobbyView === 'HOST' ? parseFloat(hostWager) : 0.1, 
+        player1ShadowName: `SHADOW#${activeMatchId.slice(-4)}` 
+      });
+      setIsSearching(false);
+      setLobbyView('SELECTION');
+    }
+  }, [activeMatchId, activePlay]);
+
+  useEffect(() => {
+    if (lastResolution && activePlay && lastResolution.duelId === activePlay.id) {
+       setIsPlaying(false);
+       // result = VICTORY if lastResolution.winner == address
+       const isWinner = lastResolution.winner.toLowerCase() === address?.toLowerCase();
+       const isDraw = lastResolution.winner === "0x0000000000000000000000000000000000000000";
+       setDuelOutcome(isDraw ? "DRAW" : isWinner ? "VICTORY" : "DEFEAT");
+       refreshBalance();
+    }
+  }, [lastResolution, activePlay, address, refreshBalance]);
+
   const handleThrow = async (selectedMove: Move) => {
     if (!activePlay) return;
+    setPlayerResult(selectedMove);
     setIsPlaying(true);
-    setPlayerResult(null); // Back to fist
-    setOpponentResult(null);
     setDuelOutcome(null);
 
-    // This calls our hook which simulates the 500ms useShieldedWrite + DuelResolved listener
-    const { opponentMove, result, payoutDelta } = await playHand(activePlay.id, selectedMove, activePlay.wager);
-    
-    // Stop Shake (Morph Time!)
-    setPlayerResult(selectedMove);
-    setOpponentResult(opponentMove);
-    setDuelOutcome(result);
-    // Real-time Wager Payout execution
-    if (payoutDelta !== 0) {
-      updateBalance(payoutDelta);
+    try {
+      await commitMove(activePlay.id, selectedMove);
+      // Now we stay in isPlaying (shake) until lastResolution arrives or user resolves
+    } catch (e) {
+      console.error(e);
+      setIsPlaying(false);
     }
-
-    setIsPlaying(false);
   };
 
   const closeMatch = () => {
@@ -83,10 +100,9 @@ function App() {
     setIsSearching(true);
     try {
         await joinQuickMatch();
-        setActivePlay({ id: "999", wager: 0.1, player1ShadowName: "SHADOW#8821" });
+        // Wait for MatchFound event via useEffect
     } catch (e) {
         console.error(e);
-    } finally {
         setIsSearching(false);
     }
   };
@@ -117,12 +133,12 @@ function App() {
                <div className="flex items-center gap-2 mt-1">
                  {!isReady && <span className="w-3 h-3 border-2 border-[#39FF14] border-t-transparent rounded-full animate-spin"></span>}
                  <div className="flex items-center gap-3">
-                   <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
-                     Bal: <span className="text-[#39FF14]">{shieldedBalance || "---."}</span>
+                    <p className="text-xl font-bold font-mono text-white tracking-widest bg-black px-4 py-1 border border-white/10 rounded-lg shadow-inner">
+                     Bal: <span className="text-[#39FF14]">{shieldedBalance || "0.00 SEIS"}</span>
                    </p>
                    {isReady && (
-                     <button onClick={() => depositToVault(5.00)} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
-                       DEPOSIT +5 SEIS
+                     <button onClick={() => depositToVault("2.0")} className="px-3 py-1 bg-[#39FF14]/20 border border-[#39FF14] text-[#39FF14] text-xs font-bold rounded hover:bg-[#39FF14] hover:text-black transition-all">
+                       DEPOSIT +2 SEIS
                      </button>
                    )}
                  </div>
@@ -220,8 +236,7 @@ function App() {
                    <button onClick={async () => {
                      try {
                        await createPrivateDuel(privateCode, parseFloat(hostWager));
-                       setActivePlay({ id: "1000", wager: parseFloat(hostWager), player1ShadowName: "WAITING_OPPONENT" });
-                       setLobbyView('SELECTION');
+                       // Wait for event or manual join confirmation
                      } catch (e) {
                        console.error(e);
                      }
@@ -243,7 +258,7 @@ function App() {
                      onClick={async () => {
                         try {
                           await joinPrivateDuel("888", privateCode);
-                          setActivePlay({ id: "888", wager: parseFloat(hostWager) || 0.1, player1ShadowName: "HOST#2918" });
+                          // ID 888 is hardcoded for private join demo, ideally we'd have a list
                         } catch (e) {
                           console.error(e);
                         }
@@ -320,20 +335,30 @@ function App() {
 
                 {/* Move Controls */}
                 {!duelOutcome && (
-                  <div className={`mt-16 flex flex-col items-center transition-opacity ${isPlaying ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
-                    <p className="text-[#39FF14] mb-4 font-bold tracking-widest text-sm animate-pulse">MATCH SECURED: SELECT YOUR ENCRYPTED SHAPE</p>
+                  <div className={`mt-16 flex flex-col items-center transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-100'}`}>
+                    <p className="text-[#39FF14] mb-4 font-bold tracking-widest text-sm animate-pulse">
+                        {isPlaying ? "WAITING FOR ON-CHAIN RESOLUTION..." : "MATCH SECURED: SELECT YOUR ENCRYPTED SHAPE"}
+                    </p>
                     <div className="flex gap-4">
                       {["ROCK", "PAPER", "SCISSORS"].map((move) => (
                          <button 
                            key={move}
                            onClick={() => handleThrow(move as Move)}
                            disabled={isPlaying || isComputing}
-                           className="px-8 py-4 bg-transparent border-2 border-gray-600 text-white font-bold text-xl rounded hover:border-[#39FF14] hover:text-[#39FF14] hover:shadow-[0_0_20px_rgba(57,255,20,0.4)] transition-all font-mono"
+                           className="px-8 py-4 bg-transparent border-2 border-gray-600 text-white font-bold text-xl rounded hover:border-[#39FF14] hover:text-[#39FF14] hover:shadow-[0_0_20px_rgba(57,255,20,0.4)] transition-all font-mono disabled:opacity-30"
                          >
                            {move}
                          </button>
                       ))}
                     </div>
+                    {isPlaying && (
+                        <button 
+                            onClick={() => resolveDuel(activePlay.id)}
+                            className="mt-8 px-6 py-2 bg-white/10 border border-white/20 text-white text-xs rounded hover:bg-white/20 transition-all font-mono"
+                        >
+                            FORCE RESOLVE (CALL TEE)
+                        </button>
+                    )}
                   </div>
                 )}
                 

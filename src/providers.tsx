@@ -4,7 +4,7 @@ import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rai
 import { WagmiProvider } from 'wagmi';
 import { defineChain } from 'viem';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
-import { ShieldedWalletProvider } from './seismic-mock';
+import { SeismicProvider } from './seismic-provider';
 
 const seismicTestnet = defineChain({
   id: 5124,
@@ -44,9 +44,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             overlayBlur: 'small',
           })}
         >
-          <ShieldedWalletProvider>
+          <SeismicProvider>
             {children}
-          </ShieldedWalletProvider>
+          </SeismicProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
