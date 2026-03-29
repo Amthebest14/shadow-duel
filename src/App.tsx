@@ -51,15 +51,16 @@ function App() {
   // Handle on-chain event synchronization
   useEffect(() => {
     if (activeMatchId && !activePlay) {
+      console.log("[App] Match found, transitioning to SELECTION.");
       setActivePlay({ 
         id: activeMatchId, 
         wager: lobbyView === 'HOST' ? parseFloat(hostWager) : 0.1, 
-        player1ShadowName: `SHADOW#${activeMatchId.slice(-4)}` 
+        player1ShadowName: `SHADOW#${activeMatchId.slice(-4).toUpperCase()}` 
       });
       setIsSearching(false);
       setLobbyView('SELECTION');
     }
-  }, [activeMatchId, activePlay]);
+  }, [activeMatchId, activePlay, lobbyView, hostWager]);
 
   useEffect(() => {
     if (lastResolution && activePlay && lastResolution.duelId === activePlay.id) {
@@ -88,6 +89,7 @@ function App() {
   };
 
   const closeMatch = () => {
+    setActiveMatchId(null);
     setActivePlay(null);
     setPlayerResult(null);
     setOpponentResult(null);
