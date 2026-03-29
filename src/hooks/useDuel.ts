@@ -25,7 +25,6 @@ export function useDuel() {
   } | null>(null);
 
   const processLogs = useCallback((logs: any[]) => {
-    console.log(`[TEE Enclave] Processing ${logs.length} logs...`);
     logs.forEach((log) => {
       try {
         const decoded = decodeEventLog({
@@ -34,33 +33,47 @@ export function useDuel() {
           topics: log.topics,
         });
 
-        console.log(`[TEE Enclave] Decoded Event: ${decoded.eventName}`, decoded.args);
-
         if (decoded.eventName === 'MatchFound' || decoded.eventName === 'DuelCreated' || decoded.eventName === 'PlayerJoined') {
           const duelId = (decoded.args as any).duelId;
           if (duelId !== undefined) {
-             const idStr = duelId.toString();
-             console.log(`[TEE Enclave] Setting Active Match: ${idStr}`);
-             setActiveMatchId(idStr);
+             setActiveMatchId(duelId.toString());
           }
         }
         
         if (decoded.eventName === 'DuelResolved') {
             const { duelId, winner } = decoded.args as any;
             if (duelId !== undefined && winner !== undefined) {
+              console.log(`[TEE Enclave] DUEL RESOLVED: ID ${duelId}, Winner ${winner}`);
               setLastResolution({ duelId: duelId.toString(), winner });
             }
         }
-      } catch (e) {
-        // Log mismatch is common for internal txs, skip silently
-      }
+      } catch (e) {}
     });
   }, []);
+
+  // Explicit watchers for higher reliability
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    eventName: 'MatchFound',
+    onLogs: processLogs,
+  });
 
   useWatchContractEvent({
     address: CONTRACT_ADDRESS,
     abi: shadowDuelAbi,
+    eventName: 'PlayerJoined',
     onLogs: processLogs,
+  });
+
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: shadowDuelAbi,
+    eventName: 'DuelResolved',
+    onLogs(logs) {
+        console.log("[Watcher] DuelResolved detected");
+        processLogs(logs);
+    },
   });
 
   const createPrivateDuel = useCallback(async (code: string, wagerAmount: number) => {
@@ -131,11 +144,8 @@ export function useDuel() {
       });
 
       if (publicClient) {
-        console.log("[TEE Enclave] Waiting for Match confirmation...");
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         processLogs(receipt.logs);
-        // Special Case: If we finish here and still no match ID, 
-        // it means we are the "Host" of this new queue item.
       }
       return hash;
     } catch (err) {

@@ -119,17 +119,19 @@ contract ShadowDuel {
 
         if (suint.unwrap(diff) == 1) {
             winner = p1;
-            // Winner takes 0.17, House takes 0.03
-            payable(p1).transfer(0.17 ether);
-            payable(owner).transfer(0.03 ether);
+            (bool s1,) = payable(p1).call{value: 0.17 ether}("");
+            (bool s2,) = payable(owner).call{value: 0.03 ether}("");
+            require(s1 && s2, "Payout failed");
         } else if (suint.unwrap(diff) == 2) {
             winner = p2;
-            payable(p2).transfer(0.17 ether);
-            payable(owner).transfer(0.03 ether);
+            (bool s1,) = payable(p2).call{value: 0.17 ether}("");
+            (bool s2,) = payable(owner).call{value: 0.03 ether}("");
+            require(s1 && s2, "Payout failed");
         } else {
             // Draw: Refund both 0.1
-            payable(p1).transfer(0.1 ether);
-            payable(p2).transfer(0.1 ether);
+            (bool s1,) = payable(p1).call{value: 0.1 ether}("");
+            (bool s2,) = payable(p2).call{value: 0.1 ether}("");
+            require(s1 && s2, "Refund failed");
         }
 
         emit DuelResolved(duelId, winner); 
