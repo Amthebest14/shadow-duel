@@ -28,39 +28,34 @@ contract ShadowDuel {
     }
 
     // ============================================
-    // SHADOW AI ENGINE (PvE)
+    // SHADOW AI ENGINE (Weighted 40/60 - No Draws)
     // ============================================
     function duelAI(suint pMove) external payable {
         require(msg.value == WAGER, "Must send exactly 0.01 SEIS");
         require(address(this).balance >= WIN_PAYOUT, "Insufficient House Funds");
 
         uint256 pMoveVal = suint.unwrap(pMove);
-        require(pMoveVal >= 1 && pMoveVal <= 3, "Invalid move: 1=Rock, 2=Paper, 3=Scissors");
+        require(pMoveVal >= 1 && pMoveVal <= 3, "Invalid move");
 
-        // Simple on-chain randomness for AI move (1-3)
-        uint256 aiMoveVal = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao))) % 3) + 1;
+        // Weighted Roll: 1-100
+        uint256 roll = (uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao))) % 100) + 1;
 
-        address winner = address(0);
-        uint256 payout = 0;
+        uint256 aiMoveVal;
+        address winner;
+        uint256 payout;
 
-        // RPS Logic: (pMove - aiMove + 3) % 3
-        // 0 = Draw, 1 = Player Wins, 2 = AI Wins
-        uint256 result = (pMoveVal + 3 - aiMoveVal) % 3;
-
-        if (result == 0) {
-            // DRAW: Refund Wager
-            winner = address(0);
-            payout = WAGER;
-            (bool success,) = msg.sender.call{value: payout}("");
-            require(success, "Refund failed");
-        } else if (result == 1) {
-            // PLAYER WINS: 0.017 Payout
+        if (roll <= 40) {
+            // 40% Player Wins: AI picks the losing move
+            // Formula: aiMove is the one pMove beats
+            aiMoveVal = ((pMoveVal + 1) % 3) + 1;
             winner = msg.sender;
             payout = WIN_PAYOUT;
             (bool success,) = msg.sender.call{value: payout}("");
             require(success, "Payout failed");
         } else {
-            // AI (HOUSE) WINS: Player keeps nothing
+            // 60% AI Wins: AI picks the winning move
+            // Formula: aiMove is the one that beats pMove
+            aiMoveVal = (pMoveVal % 3) + 1;
             winner = address(this);
             payout = 0;
         }
