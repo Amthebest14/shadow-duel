@@ -1,0 +1,7 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://gcp-2.seismictest.net/rpc"
+    }
+  ]
+}

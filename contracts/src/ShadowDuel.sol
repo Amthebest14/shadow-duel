@@ -10,13 +10,14 @@ contract ShadowDuel {
 
     struct PlayerStats {
         uint256 wins;
+        uint256 points;
         bool exists;
     }
 
     mapping(address => PlayerStats) public stats;
     address[] public playerList;
 
-    event DuelResolved(address indexed player, uint256 playerMove, uint256 aiMove, address winner, uint256 payout);
+    event DuelResolved(address indexed player, uint256 playerMove, uint256 aiMove, address winner, uint256 payout, uint256 pointsEarned);
     event HouseFunded(address indexed donor, uint256 amount);
 
     constructor() {
@@ -36,7 +37,7 @@ contract ShadowDuel {
     }
 
     // ============================================
-    // SHADOW AI ENGINE (Weighted 40/60 - Leaderboard)
+    // SHADOW AI ENGINE (Weighted 40/60 - Points System)
     // ============================================
     function duelAI(suint pMove) external payable {
         require(msg.value == WAGER, "Must send exactly 0.01 SEIS");
@@ -51,46 +52,56 @@ contract ShadowDuel {
         uint256 aiMoveVal;
         address winner;
         uint256 payout;
+        uint256 pointsEarned;
+
+        // Initialize player if first time
+        if (!stats[msg.sender].exists) {
+            stats[msg.sender].exists = true;
+            playerList.push(msg.sender);
+        }
 
         if (roll <= 40) {
-            // 40% Player Wins
+            // 40% Player Wins: +150 Points
             aiMoveVal = ((pMoveVal + 1) % 3) + 1;
             winner = msg.sender;
             payout = WIN_PAYOUT;
+            pointsEarned = 150;
             
-            // Track Win
-            if (!stats[msg.sender].exists) {
-                stats[msg.sender].exists = true;
-                playerList.push(msg.sender);
-            }
             stats[msg.sender].wins += 1;
+            stats[msg.sender].points += 150;
 
             (bool success,) = msg.sender.call{value: payout}("");
             require(success, "Payout failed");
         } else {
-            // 60% AI Wins
+            // 60% AI Wins: +50 Points
             aiMoveVal = (pMoveVal % 3) + 1;
             winner = address(this);
             payout = 0;
+            pointsEarned = 50;
+
+            stats[msg.sender].points += 50;
         }
 
-        emit DuelResolved(msg.sender, pMoveVal, aiMoveVal, winner, payout);
+        emit DuelResolved(msg.sender, pMoveVal, aiMoveVal, winner, payout, pointsEarned);
     }
 
     // ============================================
     // LEADERBOARD READS
     // ============================================
-    function getLeaderboard() external view returns (address[] memory, uint256[] memory) {
+    function getLeaderboard() external view returns (address[] memory, uint256[] memory, uint256[] memory) {
         uint256 count = playerList.length;
         address[] memory addresses = new address[](count);
-        uint256[] memory winCounts = new uint256[](count);
+        uint256[] memory totalPoints = new uint256[](count);
+        uint256[] memory totalWins = new uint256[](count);
         
         for (uint i = 0; i < count; i++) {
-            addresses[i] = playerList[i];
-            winCounts[i] = stats[addresses[i]].wins;
+            address player = playerList[i];
+            addresses[i] = player;
+            totalPoints[i] = stats[player].points;
+            totalWins[i] = stats[player].wins;
         }
         
-        return (addresses, winCounts);
+        return (addresses, totalPoints, totalWins);
     }
 
     receive() external payable {

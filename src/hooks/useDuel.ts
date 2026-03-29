@@ -9,6 +9,7 @@ const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}`;
 
 export interface LeaderboardEntry {
   address: string;
+  points: number;
   wins: number;
 }
 
@@ -23,11 +24,12 @@ export function useDuel() {
     aiMove: number;
     winner: string;
     payout: string;
+    pointsEarned: number;
   } | null>(null);
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
-  // Read Leaderboard
+  // Read Leaderboard (addresses, points, wins)
   const { data: leaderboardData, refetch: refetchLeaderboard } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: shadowDuelAbi,
@@ -36,13 +38,14 @@ export function useDuel() {
 
   useEffect(() => {
     if (leaderboardData) {
-      const [addresses, wins] = leaderboardData as [string[], bigint[]];
+      const [addresses, points, wins] = leaderboardData as [string[], bigint[], bigint[]];
       const entries: LeaderboardEntry[] = addresses.map((addr, i) => ({
         address: addr,
+        points: Number(points[i]),
         wins: Number(wins[i]),
       }));
-      // Sort by wins descending
-      entries.sort((a, b) => b.wins - a.wins);
+      // Sort by points descending
+      entries.sort((a, b) => b.points - a.points);
       setLeaderboard(entries);
     }
   }, [leaderboardData]);
@@ -57,12 +60,13 @@ export function useDuel() {
         });
 
         if (decoded.eventName === 'DuelResolved') {
-            const { playerMove, aiMove, winner, payout } = decoded.args as any;
+            const { playerMove, aiMove, winner, payout, pointsEarned } = decoded.args as any;
             setLastResolution({ 
                 playerMove: Number(playerMove), 
                 aiMove: Number(aiMove), 
                 winner, 
-                payout: payout.toString() 
+                payout: payout.toString(),
+                pointsEarned: Number(pointsEarned)
             });
             refetchLeaderboard();
         }

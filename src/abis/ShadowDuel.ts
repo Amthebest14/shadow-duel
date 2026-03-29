@@ -25,6 +25,7 @@ export const shadowDuelAbi = [
     "name": "getLeaderboard",
     "outputs": [
       { "internalType": "address[]", "name": "", "type": "address[]" },
+      { "internalType": "uint256[]", "name": "", "type": "uint256[]" },
       { "internalType": "uint256[]", "name": "", "type": "uint256[]" }
     ],
     "stateMutability": "view",
@@ -37,7 +38,8 @@ export const shadowDuelAbi = [
       { "indexed": false, "internalType": "uint256", "name": "playerMove", "type": "uint256" },
       { "indexed": false, "internalType": "uint256", "name": "aiMove", "type": "uint256" },
       { "indexed": false, "internalType": "address", "name": "winner", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "payout", "type": "uint256" }
+      { "indexed": false, "internalType": "uint256", "name": "payout", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "pointsEarned", "type": "uint256" }
     ],
     "name": "DuelResolved",
     "type": "event"
